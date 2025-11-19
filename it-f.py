@@ -1,106 +1,122 @@
 import matplotlib.pyplot as plt
 import sys
+import os
 
-num_threads = ["1", "2", "4", "8"]
-subplots = [221, 222, 223, 224]
-titles = ["1 Thread", "2 Threads", "4 Threads", "8 Threads"]
-minMax = (len(sys.argv) == 4) # Verifica se foram fornecidos valores de minimo e maximo na linha de comando
-if minMax:
+
+def process_log_file(filepath):
+    iterations = []
+    f_values = []
+
+    # Unused but parsed as per original logic
+    g_values = []
+    h_values = []
+
+    try:
+        with open(filepath, "r") as file:
+            # Skip headers (first 5 lines)
+            for _ in range(5):
+                file.readline()
+
+            line = file.readline()  # First data line
+
+            # Process lines until file ends or Phase 2 starts
+            while line:
+                parts = line.split("\t")
+
+                # Check if line is valid data or if 'Phase' (P) starts
+                if len(parts) < 5 or (parts[0].strip() and parts[0][0] == "P"):
+                    break
+
+                # Extract iteration number
+                try:
+                    current_iter = int(parts[1])
+                except (ValueError, IndexError):
+                    line = file.readline()
+                    continue
+
+                # Extract costs (g, h, f)
+                # Format expected: "g(90) h(6913) f(7003)"
+                costs_str = parts[4].strip()
+                tokens = costs_str.replace(")", "").replace("(", " ").split()
+
+                try:
+                    # Token mapping: ['g', '90', 'h', '6913', 'f', '7003']
+                    g_val = int(tokens[1])
+                    h_val = int(tokens[3])
+                    f_val = int(tokens[5])
+
+                    iterations.append(current_iter)
+                    f_values.append(f_val)
+                    g_values.append(g_val)
+                    h_values.append(h_val)
+                except (ValueError, IndexError):
+                    pass
+
+                line = file.readline()
+
+        return iterations, f_values
+
+    except FileNotFoundError:
+        print(f"Error: File not found at {filepath}")
+        return None, None
+    except Exception as e:
+        print(f"Error processing {filepath}: {e}")
+        return None, None
+
+
+def main():
+    # Thread configurations
+    thread_counts = ["1", "2", "4", "8"]
+    subplot_indices = [221, 222, 223, 224]
+    titles = ["1 Thread", "2 Threads", "4 Threads", "8 Threads"]
+
+    # CLI Argument handling
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <directory_path> [min_y] [max_y]")
+        sys.exit(1)
+
+    directory = sys.argv[1]
+
+    y_min, y_max = None, None
+    if len(sys.argv) == 4:
         try:
             y_min = int(sys.argv[2])
             y_max = int(sys.argv[3])
-        except:
-            print("Coloque um numero inteiro como limite minimo e/ou maximo")
-            quit()
+        except ValueError:
+            print("Error: Min and Max limits must be integers.")
+            sys.exit(1)
 
-for num in range(4):
-    # Escolha do arquivo a ser aberto.
-    try:
-        caminho = sys.argv[1] + "/log" + num_threads[num] + ".txt"
-        arq = open(caminho, "r")
-    except:
-        print(f"Erro: caminho para o diretorio nao existe ou nao foi digitado.")
-        quit()
+    plt.figure(figsize=(12, 10))
 
-    num_expansoes = {} # Guardara o numero de expansoes de cada vertice
-    # Guardarao os valores de F, G e H de cada vertice
-    f = {}
-    g = {}
-    h = {}
-    iteracao = [] # Lista de iteracoes. Cada iteracao eh uma tupla que contem o numero da iteracao e o no que foi expandido nela.
+    for i, thread_count in enumerate(thread_counts):
+        filename = f"log{thread_count}.txt"
+        filepath = os.path.join(directory, filename)
+
+        iterations, f_vals = process_log_file(filepath)
+
+        if iterations is None:
+            sys.exit(1)
+
+        # Sorting based on iteration number to ensure correct plotting order
+        # Zipping, sorting, and unzipping
+        if iterations:
+            sorted_pairs = sorted(zip(iterations, f_vals))
+            iterations, f_vals = zip(*sorted_pairs)
+
+        ax = plt.subplot(subplot_indices[i])
+
+        if y_min is not None and y_max is not None:
+            ax.set_ylim(y_min, y_max)
+
+        ax.set_title(titles[i])
+        ax.plot(iterations, f_vals, 'y-', label='f-value')
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("F Value")
+        ax.grid(True, linestyle='--', alpha=0.6)
+
+    plt.tight_layout()
+    plt.show()
 
 
-    # Os arquivos de log mostram os dados da varredura a partir da sexta linha.
-    # Assim, as primeiras cinco linhas (incluindo a linha vazia) sao descartadas.
-
-    linha = arq.readline()
-    linha = arq.readline()
-    linha = arq.readline()
-    linha = arq.readline()
-    linha = arq.readline()
-    linha = arq.readline() # A sexta linha do log fica guardada (primeira linha de dados)
-
-    # Cada linha tem os seguintes dados, separados por tabulacoes:
-    #   0.  numero da thread
-    #   1.  numero da iteracao
-    #   2.  a expressao "Adding:"
-    #   3.  coordenada do vertice adicionado
-    #   4.  valor de g, h e f
-    linha = linha.split("\t")
-
-    # Inicio da varredura dos vertices.
-    # A primeira linha após o relatorio com os nos comeca com "Phase 2". Assim, quando
-    # se detecta que o primeiro caracter da linha é "P", a varredura e encerrada.
-    dimensoes = None
-    while (len(linha) >= 5 and linha[0][0] != "P"):
-        # Determinacao da quantidade de dimensoes dos vertices (na primeira iteracao):
-        if dimensoes is None:
-            dimensoes = len(linha[3].split(" "))
-        
-        # Pega a coordenada da linha e armazena no vetor de vertices
-        no = linha[3].replace("(", "").replace(")","").split(" ")
-        for i in range(len(no)):
-            no[i] = int(no[i])
-
-        no = tuple(no)
-
-        # Registra a iteracao na lista de iteracoes e o vertice correspondente na lista de iteracoes.
-        iteracao.append((int(linha[1]), no))
-
-        # Registros de f, g e h
-        # linha[4] tem o formato: "g(90) h(6913) f(7003)\n"
-        proximos = linha[4].strip().replace(")", "").replace("(", " ").split()
-        # proximos agora é: ['g', '90', 'h', '6913', 'f', '7003']
-        g[no] = int(proximos[1])
-        h[no] = int(proximos[3])
-        f[no] = int(proximos[5])
-
-        # Le a proxima linha
-        linha = arq.readline().split("\t")
-
-    arq.close()
-
-    # Ordenacao da lista de iteracoes
-    iteracao.sort()
-
-    # Geracao dos graficos
-
-    num_interacao = []
-    valor_f = []
-    valor_g = []
-    valor_h = []
-    for it in iteracao:
-        num_interacao.append(it[0])
-        valor_f.append(f[it[1]])
-        valor_h.append(h[it[1]])
-        valor_g.append(g[it[1]])
-
-    ax = plt.subplot(subplots[num])
-    if minMax:    
-        plt.ylim(y_min, y_max)
-    ax.set_title(titles[num])
-    ax.plot(num_interacao, valor_f, 'y-')
-    ax.set_xlabel("Iteração")
-    ax.set_ylabel("Valor de f")
-
-plt.show()
+if __name__ == "__main__":
+    main()
