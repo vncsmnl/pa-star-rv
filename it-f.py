@@ -30,14 +30,15 @@ for num in range(4):
     iteracao = [] # Lista de iteracoes. Cada iteracao eh uma tupla que contem o numero da iteracao e o no que foi expandido nela.
 
 
-    # Os arquivos de log mostram os dados da varredura a partir da quinta linha.
-    # Assim, as quatro primeiras linhas sao descartadas.
+    # Os arquivos de log mostram os dados da varredura a partir da sexta linha.
+    # Assim, as primeiras cinco linhas (incluindo a linha vazia) sao descartadas.
 
     linha = arq.readline()
     linha = arq.readline()
     linha = arq.readline()
     linha = arq.readline()
-    linha = arq.readline() # A quinta linha do log fica guardada
+    linha = arq.readline()
+    linha = arq.readline() # A sexta linha do log fica guardada (primeira linha de dados)
 
     # Cada linha tem os seguintes dados, separados por tabulacoes:
     #   0.  numero da thread
@@ -47,13 +48,15 @@ for num in range(4):
     #   4.  valor de g, h e f
     linha = linha.split("\t")
 
-    # Determinacao da quantidade de dimensoes dos vertices:
-    dimensoes = len(linha[3].split(" "))
-
     # Inicio da varredura dos vertices.
     # A primeira linha após o relatorio com os nos comeca com "Phase 2". Assim, quando
     # se detecta que o primeiro caracter da linha é "P", a varredura e encerrada.
-    while (linha[0][0] != "P"):
+    dimensoes = None
+    while (len(linha) >= 5 and linha[0][0] != "P"):
+        # Determinacao da quantidade de dimensoes dos vertices (na primeira iteracao):
+        if dimensoes is None:
+            dimensoes = len(linha[3].split(" "))
+        
         # Pega a coordenada da linha e armazena no vetor de vertices
         no = linha[3].replace("(", "").replace(")","").split(" ")
         for i in range(len(no)):
@@ -65,10 +68,12 @@ for num in range(4):
         iteracao.append((int(linha[1]), no))
 
         # Registros de f, g e h
-        proximos = linha[4].replace(")", "").split(" ")
-        g[no] = int(proximos[2])
-        h[no] = int(proximos[5])
-        f[no] = int(proximos[8])
+        # linha[4] tem o formato: "g(90) h(6913) f(7003)\n"
+        proximos = linha[4].strip().replace(")", "").replace("(", " ").split()
+        # proximos agora é: ['g', '90', 'h', '6913', 'f', '7003']
+        g[no] = int(proximos[1])
+        h[no] = int(proximos[3])
+        f[no] = int(proximos[5])
 
         # Le a proxima linha
         linha = arq.readline().split("\t")

@@ -1,76 +1,115 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+import tkinter as tk
+from tkinter import filedialog, messagebox, simpledialog
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-# Escolha do arquivo a ser aberto.
-try:
-    caminho = sys.argv[1]
-    arq = open(caminho, "r")
-except:
-    print(f"Erro: caminho para o arquivo nao existe ou nao foi digitado.")
-    quit()
+def processar_arquivo(caminho):
+    """Processa o arquivo de log e retorna os dados necessários."""
+    try:
+        arq = open(caminho, "r")
+    except:
+        messagebox.showerror("Erro", "Caminho para o arquivo não existe ou não pode ser aberto.")
+        return None
 
-num_expansoes = {} # Guardara o numero de expansoes de cada vertice
-# Guardarao os valores de F, G e H de cada vertice
-f = {}
-g = {}
-h = {}
-saltos = [] # Lista de saltos
-num_saltos = 0 # Quantidade de saltos
-iteracao = [] # Lista de iteracoes. Cada iteracao eh uma tupla que contem o numero da iteracao e o no que foi expandido nela.
-med_h_vizinhos = {} # Guardara a media dos valores de H dos vizinhos de cada no
+def processar_arquivo(caminho):
+    """Processa o arquivo de log e retorna os dados necessários."""
+    try:
+        arq = open(caminho, "r")
+    except:
+        messagebox.showerror("Erro", "Caminho para o arquivo não existe ou não pode ser aberto.")
+        return None
 
-# Os arquivos de log mostram os dados da varredura a partir da quinta linha.
-# Assim, as quatro primeiras linhas sao descartadas.
+    num_expansoes = {}
+    f = {}
+    g = {}
+    h = {}
+    saltos = []
+    num_saltos = 0
+    iteracao = []
+    med_h_vizinhos = {}
 
-linha = arq.readline()
-linha = arq.readline()
-linha = arq.readline()
-linha = arq.readline()
-linha = arq.readline() # A quinta linha do log fica guardada
+    # Pula as primeiras linhas de cabeçalho
+    linha = arq.readline()  # Linha 1: PA-Star Execution Log
+    linha = arq.readline()  # Linha 2: Threads: X
+    linha = arq.readline()  # Linha 3: Hash: ...
+    linha = arq.readline()  # Linha 4: Shift: ...
+    linha = arq.readline()  # Linha 5: linha vazia
+    linha = arq.readline()  # Linha 6: primeira linha de dados
 
-# Cada linha tem os seguintes dados, separados por tabulacoes:
-#   0.  numero da thread
-#   1.  numero da iteracao
-#   2.  a expressao "Adding:"
-#   3.  coordenada do vertice adicionado
-#   4.  valor de g, h e f
-linha = linha.split("\t")
+    # Pula linhas vazias até encontrar dados
+    while linha.strip() == "":
+        linha = arq.readline()
+        if not linha:
+            messagebox.showerror("Erro", "Arquivo não contém dados de execução.")
+            arq.close()
+            return None
 
-# Determinacao da quantidade de dimensoes dos vertices:
-dimensoes = len(linha[3].split(" "))
+    linha = linha.split("\t")
 
-# Inicio da varredura dos vertices.
-# A primeira linha após o relatorio com os nos comeca com "Phase 2". Assim, quando
-# se detecta que o primeiro caracter da linha é "P", a varredura e encerrada.
-while (linha[0][0] != "P"):
-    # Pega a coordenada da linha e armazena no vetor de vertices
-    no = linha[3].replace("(", "").replace(")","").split(" ")
-    for i in range(len(no)):
-        no[i] = int(no[i])
+    # Determinacao da quantidade de dimensoes dos vertices:
+    dimensoes = len(linha[3].strip().replace("(", "").replace(")", "").split())
 
-    no = tuple(no)
+    # Inicio da varredura dos vertices.
+    while linha and linha[0].strip() and (linha[0][0] != "P"):
+        coordenada_str = linha[3].strip()
+        no = coordenada_str.replace("(", "").replace(")", "").split()
+        for i in range(len(no)):
+            no[i] = int(no[i])
 
-    # Registra a iteracao na lista de iteracoes e o vertice correspondente na lista de iteracoes.
-    iteracao.append((int(linha[1]), no))
+        no = tuple(no)
+        iteracao.append((int(linha[1]), no))
 
-    # Registros de f, g e h
-    proximos = linha[4].replace(")", "").split(" ")
-    g[no] = int(proximos[2])
-    h[no] = int(proximos[5])
-    f[no] = int(proximos[8])
+        # Registros de f, g e h
+        valores_str = linha[4].strip()
+        
+        # Detectar formato: verifica se contém "g(" ou "g -"
+        if "g(" in valores_str:
+            # Formato novo: g(90) h(82) f(172)
+            valores = valores_str.split()
+            g_str = valores[0].replace("g(", "").replace(")", "")
+            h_str = valores[1].replace("h(", "").replace(")", "")
+            f_str = valores[2].replace("f(", "").replace(")", "")
+        else:
+            # Formato antigo: g - 90 (h - 82 f - 172)
+            # Remove parênteses e faz split
+            valores_str = valores_str.replace("(", "").replace(")", "")
+            partes = valores_str.split()
+            # Formato: g - 90 h - 82 f - 172
+            g_str = partes[2]  # posição após "g -"
+            h_str = partes[5]  # posição após "h -"
+            f_str = partes[8]  # posição após "f -"
 
-    # Le a proxima linha
-    linha = arq.readline().split("\t")
+        g[no] = int(g_str)
+        h[no] = int(h_str)
+        f[no] = int(f_str)
 
-arq.close()
+        linha = arq.readline()
+        if linha:
+            linha = linha.split("\t")
 
-# Ordenacao da lista de iteracoes
-iteracao.sort()
+    arq.close()
 
-# Define a funcao recursiva que retorna os vizinhos de um vertice
+    # Ordenacao da lista de iteracoes
+    iteracao.sort()
+
+    return {
+        'num_expansoes': num_expansoes,
+        'f': f,
+        'g': g,
+        'h': h,
+        'saltos': saltos,
+        'num_saltos': num_saltos,
+        'iteracao': iteracao,
+        'med_h_vizinhos': med_h_vizinhos,
+        'dimensoes': dimensoes
+    }
+
+
 def get_vizinhos(vertice, lista_viz, indice):
+    """Retorna os vizinhos de um vertice."""
     if indice <= 0:
         lista_viz.append(vertice)
         novo_vertice = list(vertice)
@@ -91,180 +130,213 @@ def get_vizinhos(vertice, lista_viz, indice):
         lista_viz = get_vizinhos(tuple(novo_vertice), lista_viz.copy(), indice - 1)
     return lista_viz
 
-indice = dimensoes - 1 # Indice que sera usado pela funcao que retorna os vizinhos
-no_anterior = None
 
-# Calculo da quantidade de expansoes, dos saltos e da media de H dos vizinhos de cada no
-for it in iteracao:
-    vertice = it[1]
-    # Atualiza o numero de expansoes.
-    try:
-        num_expansoes[vertice] += 1
-    except:
-        num_expansoes[vertice] = 1
+def calcular_metricas(dados):
+    """Calcula as métricas adicionais dos dados processados."""
+    num_expansoes = dados['num_expansoes']
+    h = dados['h']
+    iteracao = dados['iteracao']
+    saltos = dados['saltos']
+    med_h_vizinhos = dados['med_h_vizinhos']
+    dimensoes = dados['dimensoes']
     
-    # Obtem os vizinhos do vertice
-    vizinhos = get_vizinhos(vertice, [], indice)
-    vizinhos = list(dict.fromkeys(vizinhos)) # Retira as repeticoes
-    vizinhos.remove(vertice) # A lista de vizinhos tambem inclui o vertice original. Aqui ele eh retirado.
+    indice = dimensoes - 1
+    no_anterior = None
+    num_saltos = 0
 
-    # Verifica se houve algum salto. Se houve, atualiza o contador e coloca o salto na lista de saltos.
-    if no_anterior != None:
-        if not (no_anterior in vizinhos):
-            num_saltos += 1
-            saltos.append((no_anterior, vertice))
-
-    # Calcula a media de H dos vizinhos que foram expandidos
-    num_viz = 0 # Quantidade de vizinhos que foram expandidos
-    soma = 0
-    for vizinho in vizinhos:
-        # Se o vizinho nao tiver sido expandido, ele nao estara no dicionario com os valores de h
+    for it in iteracao:
+        vertice = it[1]
         try:
-            soma += h[vizinho]
+            num_expansoes[vertice] += 1
         except:
-            continue
-        
-        num_viz += 1 # Atualiza a quantidade de vizinhos expandidos
+            num_expansoes[vertice] = 1
 
-    # Se o vertice nao tem vizinhos expandidos, a media eh armazenada como -1
-    if num_viz == 0:
-        med_h_vizinhos[vertice] = -1
-    else:
-        med_h_vizinhos[vertice] = soma/num_viz
-        
-    no_anterior = vertice
+        vizinhos = get_vizinhos(vertice, [], indice)
+        vizinhos = list(dict.fromkeys(vizinhos))
+        vizinhos.remove(vertice)
 
+        if no_anterior != None:
+            if not (no_anterior in vizinhos):
+                num_saltos += 1
+                saltos.append((no_anterior, vertice))
 
-# Impressao da quantidade de iteracoes:
-print(f"Quantidade de iteracoes: {len(iteracao)}\n")
-
-# Impressao dos vertices que foram abertos:
-print("Vertices abertos\tNumero de expansoes:")
-for it in iteracao:
-    print(f"{it[1]}\t{num_expansoes[it[1]]}")
-print("\n")
-
-# Impressao dos saltos
-print(f"Quantidade de saltos: {num_saltos}")
-print("Lista de saltos:")
-print(f"Origem\tDestino")
-for salto in saltos:
-    print(f"{salto[0]}\t{salto[1]}")
-print("\n")
-
-# Impressao das medias dos valores de h dos vizinhos:
-print("Vertice\tMedia de h dos vizinhos")
-for vertice in med_h_vizinhos:
-    if med_h_vizinhos[vertice] == -1:
-        print(f"{vertice}\tSem vizinhos expandidos")
-        continue
-    print(f"{vertice}\t{med_h_vizinhos[vertice]}")
-
-# Geracao dos graficos
-
-preteridas = []
-# Se houver mais de 3 sequencias alinhadas, o usuario escolhe quais sequencias serao mostradas
-if dimensoes > 3:
-    while True:
-        escolhidas = input("Escolha as 3 dimensoes que serao mostradas, separadas por virgulas.\n").replace(" ", "").split(",")
-        if len(escolhidas) != 3:
-            continue
-        for i in range(3):
-            escolhidas[i] = int(escolhidas[i])
-        for i in range(dimensoes):
-            if not i in escolhidas:
-                preteridas.append(i)
-        break
-
-    x = [[],[],[],[]]
-    y = [[],[],[],[]]
-    z = [[],[],[],[]]
-    t = [[],[],[],[]]
-    pos_subplot = (221,222,223,224)
-    while preteridas != []:
-        preterida = preteridas.pop()
-        while True:
-            id_preterida = input(f"Escolha 4 coordenadas para a dimensao {preterida} (comprimento = {len(iteracao)})").replace(" ", "").split(",")
-            if len(id_preterida) != 4:
+        num_viz = 0
+        soma = 0
+        for vizinho in vizinhos:
+            try:
+                soma += h[vizinho]
+            except:
                 continue
-            for i in range(len(id_preterida)):
-                id_preterida[i] = int(id_preterida[i])
+            num_viz += 1
 
-            for it in iteracao:
-                vertice = it[1]
-                if vertice[preterida] == id_preterida[0]:
-                    x[0].append(vertice[escolhidas[0]])
-                    y[0].append(vertice[escolhidas[1]])
-                    z[0].append(vertice[escolhidas[2]])
-                    t[0].append(it[0])
+        if num_viz == 0:
+            med_h_vizinhos[vertice] = -1
+        else:
+            med_h_vizinhos[vertice] = soma / num_viz
 
-                elif vertice[preterida] == id_preterida[1]:
-                    x[1].append(vertice[escolhidas[0]])
-                    y[1].append(vertice[escolhidas[1]])
-                    z[1].append(vertice[escolhidas[2]])
-                    t[1].append(it[0])
-
-                elif vertice[preterida] == id_preterida[2]:
-                    x[2].append(vertice[escolhidas[0]])
-                    y[2].append(vertice[escolhidas[1]])
-                    z[2].append(vertice[escolhidas[2]])
-                    t[2].append(it[0])
-
-                elif vertice[preterida] == id_preterida[3]:
-                    x[3].append(vertice[escolhidas[0]])
-                    y[3].append(vertice[escolhidas[1]])
-                    z[3].append(vertice[escolhidas[2]])
-                    t[3].append(it[0])
-
-            # Loop de criacao dos graficos
-            fig = plt.figure()
-            for i in range(4):
-                ax = fig.add_subplot(pos_subplot[i], projection = '3d')
-                ax.title.set_text(f"Dimensao {preterida} = {id_preterida[i]}")
-                x_np = np.array(x[i])
-                y_np = np.array(y[i])
-                z_np = np.array(z[i])
-                t_np = np.array(t[i])
-                grafico = ax.scatter(x_np, y_np, z_np, c = t_np, cmap = 'viridis', marker = 'o')
-                # Coloca linhas
-                # for j in range(len(x_np) - 1):
-                #     ax.plot([x_np[j], x_np[j+1]], [y_np[j], y_np[j+1]], [z_np[j], z_np[j+1]], linestyle='--', color='black')
-                barra = fig.colorbar(grafico)
-                barra.set_label('Iteração')
-                ax.set_xlabel(f"Sequência {escolhidas[0]}")
-                ax.set_ylabel(f"Sequência {escolhidas[1]}")
-                ax.set_zlabel(f"Sequência {escolhidas[2]}")
-
-            break
+        no_anterior = vertice
     
-# Caso com 3 sequencias alinhadas
-else:
+    dados['num_saltos'] = num_saltos
+    return dados
+
+
+def gerar_grafico(dados):
+    """Gera o gráfico de visualização."""
+    iteracao = dados['iteracao']
+    dimensoes = dados['dimensoes']
+    
+    if dimensoes > 3:
+        messagebox.showinfo("Atenção", f"O arquivo possui {dimensoes} dimensões. Apenas gráficos 3D (3 dimensões) são suportados.")
+        return None
+    
     x = []
     y = []
     z = []
     tempo = []
+    
     for it in iteracao:
         x.append(it[1][0])
         y.append(it[1][1])
         z.append(it[1][2])
         tempo.append(it[0])
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
-    # Os vetores x, y e z correspondem as coordenadas dos pontos no grafico.
-    # O vetor de tempo determinara a cor de cada ponto.
-    grafico = ax.scatter(x,y,z, c = tempo, cmap = 'viridis', marker = 'o')
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    grafico = ax.scatter(x, y, z, c=tempo, cmap='viridis', marker='o')
     ax.set_xlabel("Sequência 1")
     ax.set_ylabel("Sequência 2")
     ax.set_zlabel("Sequência 3")
 
-    # Definicao de limites dos eixos x e y
-    ### NAO FUNCIONOU... ###
-    # ax.set_xlim(xmin=50, xmax=150)
-    # ax.set_ylim(ymin=200, ymax=400)
-
-    # Cria uma barra de cores para ser usada na legenda.
     barra = fig.colorbar(grafico)
     barra.set_label('Iteração')
+    
+    return fig
 
-plt.show()
+
+class PAStarGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("PA-Star Runtime Visualizer")
+        self.root.geometry("1000x700")
+        
+        self.dados = None
+        self.figura_atual = None
+        
+        # Frame principal
+        frame_botoes = tk.Frame(root)
+        frame_botoes.pack(pady=10)
+        
+        # Botão para abrir arquivo
+        self.btn_abrir = tk.Button(frame_botoes, text="Abrir Arquivo Log", 
+                                    command=self.abrir_arquivo, 
+                                    font=("Arial", 12), 
+                                    bg="#4CAF50", 
+                                    fg="white",
+                                    padx=20, pady=10)
+        self.btn_abrir.pack(side=tk.LEFT, padx=5)
+        
+        # Botão para salvar imagem
+        self.btn_salvar = tk.Button(frame_botoes, text="Salvar Imagem", 
+                                     command=self.salvar_imagem, 
+                                     font=("Arial", 12),
+                                     bg="#2196F3",
+                                     fg="white",
+                                     padx=20, pady=10,
+                                     state=tk.DISABLED)
+        self.btn_salvar.pack(side=tk.LEFT, padx=5)
+        
+        # Label de status
+        self.label_status = tk.Label(root, text="Aguardando arquivo...", 
+                                      font=("Arial", 10))
+        self.label_status.pack(pady=5)
+        
+        # Frame para o gráfico
+        self.frame_grafico = tk.Frame(root)
+        self.frame_grafico.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    def abrir_arquivo(self):
+        """Abre o arquivo de log e processa os dados."""
+        caminho = filedialog.askopenfilename(
+            title="Selecione o arquivo de log",
+            filetypes=[("Arquivos de texto", "*.txt"), ("Todos os arquivos", "*.*")]
+        )
+        
+        if not caminho:
+            return
+        
+        self.label_status.config(text="Processando arquivo...")
+        self.root.update()
+        
+        # Processa o arquivo
+        dados = processar_arquivo(caminho)
+        if dados is None:
+            self.label_status.config(text="Erro ao processar arquivo")
+            return
+        
+        # Calcula métricas
+        dados = calcular_metricas(dados)
+        self.dados = dados
+        
+        # Gera o gráfico
+        fig = gerar_grafico(dados)
+        if fig is None:
+            self.label_status.config(text="Erro ao gerar gráfico")
+            return
+        
+        self.figura_atual = fig
+        
+        # Limpa o frame de gráfico anterior
+        for widget in self.frame_grafico.winfo_children():
+            widget.destroy()
+        
+        # Mostra o gráfico na GUI
+        canvas = FigureCanvasTkAgg(fig, master=self.frame_grafico)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Habilita o botão de salvar
+        self.btn_salvar.config(state=tk.NORMAL)
+        
+        # Atualiza status
+        num_iteracoes = len(dados['iteracao'])
+        num_saltos = dados['num_saltos']
+        self.label_status.config(
+            text=f"Arquivo processado! Iterações: {num_iteracoes} | Saltos: {num_saltos}"
+        )
+    
+    def salvar_imagem(self):
+        """Salva a imagem do gráfico."""
+        if self.figura_atual is None:
+            messagebox.showwarning("Aviso", "Nenhum gráfico para salvar!")
+            return
+        
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar imagem como",
+            defaultextension=".png",
+            filetypes=[
+                ("PNG", "*.png"),
+                ("JPEG", "*.jpg"),
+                ("PDF", "*.pdf"),
+                ("SVG", "*.svg"),
+                ("Todos os arquivos", "*.*")
+            ]
+        )
+        
+        if not caminho:
+            return
+        
+        try:
+            self.figura_atual.savefig(caminho, dpi=300, bbox_inches='tight')
+            messagebox.showinfo("Sucesso", f"Imagem salva em:\n{caminho}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar imagem:\n{str(e)}")
+
+
+def main():
+    root = tk.Tk()
+    app = PAStarGUI(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
