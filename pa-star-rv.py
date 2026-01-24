@@ -176,7 +176,7 @@ def calculate_metrics(data):
 
 
 def generate_plot(data):
-    """Generates the 3D visualization plot."""
+    """Generates the 3D visualization plot with 2D projections."""
     iterations = data['iterations']
     dimensions = data['dimensions']
 
@@ -195,17 +195,80 @@ def generate_plot(data):
         z_vals.append(node[2])
         times.append(timestamp)
 
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
+    x_vals = np.array(x_vals)
+    y_vals = np.array(y_vals)
+    z_vals = np.array(z_vals)
+    times = np.array(times)
 
-    scatter = ax.scatter(x_vals, y_vals, z_vals, c=times, cmap='viridis', marker='o')
+    # Create figure with 2x2 grid: 3D plot + 3 projections
+    fig = plt.figure(figsize=(14, 10))
 
-    ax.set_xlabel("Sequence 1")
-    ax.set_ylabel("Sequence 2")
-    ax.set_zlabel("Sequence 3")
+    # Main 3D plot (top-left, larger)
+    ax3d = fig.add_subplot(2, 2, 1, projection='3d')
+    scatter3d = ax3d.scatter(x_vals, y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10)
+    ax3d.set_xlabel("Sequence A (i)")
+    ax3d.set_ylabel("Sequence B (j)")
+    ax3d.set_zlabel("Sequence C (k)")
+    ax3d.set_title("3D View")
 
-    colorbar = fig.colorbar(scatter)
+    # XY Projection (top-right)
+    ax_xy = fig.add_subplot(2, 2, 2)
+    scatter_xy = ax_xy.scatter(x_vals, y_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+    ax_xy.set_xlabel("Sequence A (i)")
+    ax_xy.set_ylabel("Sequence B (j)")
+    ax_xy.set_title("XY Projection (Top View)")
+    ax_xy.set_aspect('equal', adjustable='box')
+    ax_xy.grid(True, linestyle='--', alpha=0.5)
+
+    # Calculate and display band width for XY
+    if len(x_vals) > 0:
+        # Band width as perpendicular distance from diagonal
+        diag_dist_xy = np.abs(x_vals - y_vals) / np.sqrt(2)
+        band_width_xy = np.max(diag_dist_xy) - np.min(diag_dist_xy)
+        ax_xy.text(0.02, 0.98, f"Band width: {band_width_xy:.1f}",
+                   transform=ax_xy.transAxes, fontsize=9,
+                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # XZ Projection (bottom-left)
+    ax_xz = fig.add_subplot(2, 2, 3)
+    scatter_xz = ax_xz.scatter(x_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+    ax_xz.set_xlabel("Sequence A (i)")
+    ax_xz.set_ylabel("Sequence C (k)")
+    ax_xz.set_title("XZ Projection (Front View)")
+    ax_xz.set_aspect('equal', adjustable='box')
+    ax_xz.grid(True, linestyle='--', alpha=0.5)
+
+    # Calculate and display band width for XZ
+    if len(x_vals) > 0:
+        diag_dist_xz = np.abs(x_vals - z_vals) / np.sqrt(2)
+        band_width_xz = np.max(diag_dist_xz) - np.min(diag_dist_xz)
+        ax_xz.text(0.02, 0.98, f"Band width: {band_width_xz:.1f}",
+                   transform=ax_xz.transAxes, fontsize=9,
+                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # YZ Projection (bottom-right)
+    ax_yz = fig.add_subplot(2, 2, 4)
+    scatter_yz = ax_yz.scatter(y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+    ax_yz.set_xlabel("Sequence B (j)")
+    ax_yz.set_ylabel("Sequence C (k)")
+    ax_yz.set_title("YZ Projection (Side View)")
+    ax_yz.set_aspect('equal', adjustable='box')
+    ax_yz.grid(True, linestyle='--', alpha=0.5)
+
+    # Calculate and display band width for YZ
+    if len(y_vals) > 0:
+        diag_dist_yz = np.abs(y_vals - z_vals) / np.sqrt(2)
+        band_width_yz = np.max(diag_dist_yz) - np.min(diag_dist_yz)
+        ax_yz.text(0.02, 0.98, f"Band width: {band_width_yz:.1f}",
+                   transform=ax_yz.transAxes, fontsize=9,
+                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # Add colorbar for the entire figure
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    colorbar = fig.colorbar(scatter3d, cax=cbar_ax)
     colorbar.set_label('Iteration')
+
+    plt.tight_layout(rect=[0, 0, 0.90, 1])
 
     return fig
 
@@ -214,7 +277,7 @@ class PAStarGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("PA-Star Runtime Visualizer")
-        self.root.geometry("1000x700")
+        self.root.geometry("1200x900")
 
         self.data = None
         self.current_figure = None
