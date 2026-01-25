@@ -175,8 +175,8 @@ def calculate_metrics(data):
     return data
 
 
-def generate_plot(data):
-    """Generates the 3D visualization plot with 2D projections."""
+def generate_plot(data, show_projections=True):
+    """Generates the 3D visualization plot"""
     iterations = data['iterations']
     dimensions = data['dimensions']
 
@@ -200,75 +200,88 @@ def generate_plot(data):
     z_vals = np.array(z_vals)
     times = np.array(times)
 
-    # Create figure with 2x2 grid: 3D plot + 3 projections
-    fig = plt.figure(figsize=(14, 10))
+    if show_projections:
+        # Create figure with 2x2 grid: 3D plot + 3 projections
+        fig = plt.figure(figsize=(14, 10))
 
-    # Main 3D plot (top-left, larger)
-    ax3d = fig.add_subplot(2, 2, 1, projection='3d')
+        # Main 3D plot (top-left, larger)
+        ax3d = fig.add_subplot(2, 2, 1, projection='3d')
+    else:
+        # Create figure with only 3D plot
+        fig = plt.figure(figsize=(10, 8))
+        ax3d = fig.add_subplot(1, 1, 1, projection='3d')
+
     scatter3d = ax3d.scatter(x_vals, y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10)
     ax3d.set_xlabel("Sequence A (i)")
     ax3d.set_ylabel("Sequence B (j)")
     ax3d.set_zlabel("Sequence C (k)")
     ax3d.set_title("3D View")
 
-    # XY Projection (top-right)
-    ax_xy = fig.add_subplot(2, 2, 2)
-    scatter_xy = ax_xy.scatter(x_vals, y_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-    ax_xy.set_xlabel("Sequence A (i)")
-    ax_xy.set_ylabel("Sequence B (j)")
-    ax_xy.set_title("XY Projection (Top View)")
-    ax_xy.set_aspect('equal', adjustable='box')
-    ax_xy.grid(True, linestyle='--', alpha=0.5)
+    if show_projections:
+        # XY Projection (top-right)
+        ax_xy = fig.add_subplot(2, 2, 2)
+        scatter_xy = ax_xy.scatter(x_vals, y_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+        ax_xy.set_xlabel("Sequence A (i)")
+        ax_xy.set_ylabel("Sequence B (j)")
+        ax_xy.text(-0.15, 0.5, "XY Projection (Top View)", transform=ax_xy.transAxes,
+                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
+        ax_xy.grid(True, linestyle='--', alpha=0.5)
 
-    # Calculate and display band width for XY
-    if len(x_vals) > 0:
-        # Band width as perpendicular distance from diagonal
-        diag_dist_xy = np.abs(x_vals - y_vals) / np.sqrt(2)
-        band_width_xy = np.max(diag_dist_xy) - np.min(diag_dist_xy)
-        ax_xy.text(0.02, 0.98, f"Band width: {band_width_xy:.1f}",
-                   transform=ax_xy.transAxes, fontsize=9,
-                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        # Calculate and display band width for XY
+        if len(x_vals) > 0:
+            # Band width as perpendicular distance from diagonal
+            diag_dist_xy = np.abs(x_vals - y_vals) / np.sqrt(2)
+            band_width_xy = np.max(diag_dist_xy) - np.min(diag_dist_xy)
+            ax_xy.text(0.02, 0.98, f"Band width: {band_width_xy:.1f}",
+                       transform=ax_xy.transAxes, fontsize=9,
+                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-    # XZ Projection (bottom-left)
-    ax_xz = fig.add_subplot(2, 2, 3)
-    scatter_xz = ax_xz.scatter(x_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-    ax_xz.set_xlabel("Sequence A (i)")
-    ax_xz.set_ylabel("Sequence C (k)")
-    ax_xz.set_title("XZ Projection (Front View)")
-    ax_xz.set_aspect('equal', adjustable='box')
-    ax_xz.grid(True, linestyle='--', alpha=0.5)
+        # XZ Projection (bottom-left)
+        ax_xz = fig.add_subplot(2, 2, 3)
+        scatter_xz = ax_xz.scatter(x_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+        ax_xz.set_xlabel("Sequence A (i)")
+        ax_xz.set_ylabel("Sequence C (k)")
+        ax_xz.text(-0.15, 0.5, "XZ Projection (Front View)", transform=ax_xz.transAxes,
+                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
+        ax_xz.grid(True, linestyle='--', alpha=0.5)
 
-    # Calculate and display band width for XZ
-    if len(x_vals) > 0:
-        diag_dist_xz = np.abs(x_vals - z_vals) / np.sqrt(2)
-        band_width_xz = np.max(diag_dist_xz) - np.min(diag_dist_xz)
-        ax_xz.text(0.02, 0.98, f"Band width: {band_width_xz:.1f}",
-                   transform=ax_xz.transAxes, fontsize=9,
-                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        # Calculate and display band width for XZ
+        if len(x_vals) > 0:
+            diag_dist_xz = np.abs(x_vals - z_vals) / np.sqrt(2)
+            band_width_xz = np.max(diag_dist_xz) - np.min(diag_dist_xz)
+            ax_xz.text(0.02, 0.98, f"Band width: {band_width_xz:.1f}",
+                       transform=ax_xz.transAxes, fontsize=9,
+                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-    # YZ Projection (bottom-right)
-    ax_yz = fig.add_subplot(2, 2, 4)
-    scatter_yz = ax_yz.scatter(y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-    ax_yz.set_xlabel("Sequence B (j)")
-    ax_yz.set_ylabel("Sequence C (k)")
-    ax_yz.set_title("YZ Projection (Side View)")
-    ax_yz.set_aspect('equal', adjustable='box')
-    ax_yz.grid(True, linestyle='--', alpha=0.5)
+        # YZ Projection (bottom-right)
+        ax_yz = fig.add_subplot(2, 2, 4)
+        scatter_yz = ax_yz.scatter(y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
+        ax_yz.set_xlabel("Sequence B (j)")
+        ax_yz.set_ylabel("Sequence C (k)")
+        ax_yz.text(-0.15, 0.5, "YZ Projection (Side View)", transform=ax_yz.transAxes,
+                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
+        ax_yz.grid(True, linestyle='--', alpha=0.5)
 
-    # Calculate and display band width for YZ
-    if len(y_vals) > 0:
-        diag_dist_yz = np.abs(y_vals - z_vals) / np.sqrt(2)
-        band_width_yz = np.max(diag_dist_yz) - np.min(diag_dist_yz)
-        ax_yz.text(0.02, 0.98, f"Band width: {band_width_yz:.1f}",
-                   transform=ax_yz.transAxes, fontsize=9,
-                   verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        # Calculate and display band width for YZ
+        if len(y_vals) > 0:
+            diag_dist_yz = np.abs(y_vals - z_vals) / np.sqrt(2)
+            band_width_yz = np.max(diag_dist_yz) - np.min(diag_dist_yz)
+            ax_yz.text(0.02, 0.98, f"Band width: {band_width_yz:.1f}",
+                       transform=ax_yz.transAxes, fontsize=9,
+                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-    # Add colorbar for the entire figure
-    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    colorbar = fig.colorbar(scatter3d, cax=cbar_ax)
-    colorbar.set_label('Iteration')
+        # Add colorbar for the entire figure
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        colorbar = fig.colorbar(scatter3d, cax=cbar_ax)
+        colorbar.set_label('Iteration')
 
-    plt.tight_layout(rect=[0, 0, 0.90, 1])
+        plt.tight_layout(rect=[0, 0, 0.90, 1])
+    else:
+        # Add colorbar for 3D only view
+        colorbar = fig.colorbar(scatter3d, ax=ax3d, shrink=0.6, pad=0.1)
+        colorbar.set_label('Iteration')
+
+        plt.tight_layout()
 
     return fig
 
@@ -300,6 +313,14 @@ class PAStarGUI:
                                   state=tk.DISABLED)
         self.btn_save.pack(side=tk.LEFT, padx=5)
 
+        # Checkbox for projections
+        self.show_projections_var = tk.BooleanVar(value=True)
+        self.chk_projections = tk.Checkbutton(button_frame, text="Show Projections",
+                                              variable=self.show_projections_var,
+                                              command=self.on_projection_toggle,
+                                              font=("Arial", 11))
+        self.chk_projections.pack(side=tk.LEFT, padx=15)
+
         self.status_label = tk.Label(root, text="Waiting for file...", font=("Arial", 10))
         self.status_label.pack(pady=5)
 
@@ -326,7 +347,7 @@ class PAStarGUI:
         processed_data = calculate_metrics(raw_data)
         self.data = processed_data
 
-        fig = generate_plot(processed_data)
+        fig = generate_plot(processed_data, self.show_projections_var.get())
         if fig is None:
             self.status_label.config(text="Error generating graph")
             return
@@ -348,6 +369,25 @@ class PAStarGUI:
         self.status_label.config(
             text=f"File processed! Iterations: {num_iterations} | Jumps: {num_jumps}"
         )
+
+    def on_projection_toggle(self):
+        """Callback when projection checkbox is toggled."""
+        if self.data is None:
+            return
+
+        fig = generate_plot(self.data, self.show_projections_var.get())
+        if fig is None:
+            return
+
+        self.current_figure = fig
+
+        # Clear previous graph
+        for widget in self.graph_frame.winfo_children():
+            widget.destroy()
+
+        canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def save_image(self):
         if self.current_figure is None:
