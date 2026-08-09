@@ -1,425 +1,1090 @@
-import matplotlib.pyplot as plt
-import numpy as np
+"""
+PA-Star Runtime Runtime Visualizer
+"""
+
+import os
 import sys
-import tkinter as tk
-from tkinter import filedialog, messagebox
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import traceback
+
+import matplotlib
+import numpy as np
+
+matplotlib.use("Qt5Agg")
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.colors import LogNorm, TwoSlopeNorm
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QSizePolicy,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+# ─────────────────────────────────────────────
+#  PALETTE
+# ─────────────────────────────────────────────
+
+P = {
+    "a": "#1f77b4",  # blue  — A
+    "b": "#d62728",  # red   — B
+    "warn": "#ff7f0e",
+    "grid": "#e0e0e0",
+}
+
+
+# ─────────────────────────────────────────────
+#  PARSING
+# ─────────────────────────────────────────────
 
 
 def process_log_file(filepath):
-    """Parses the log file and returns the necessary execution data."""
-    try:
-        with open(filepath, "r") as file:
-            num_expansions = {}
-            f_costs = {}
-            g_costs = {}
-            h_costs = {}
-            jumps = []
-            iterations = []
-            avg_h_neighbors = {}
+    f_costs, g_costs, h_costs, iterations = {}, {}, {}, []
+    with open(filepath, "r") as fh:
+        for _ in range(5):
+            fh.readline()
+        line = fh.readline()
+        while line and line.strip() == "":
+            line = fh.readline()
+        if not line:
+            raise ValueError("File contains no execution data.")
 
-            # Skip headers
-            # 1: PA-Star Execution Log, 2: Threads, 3: Hash, 4: Shift, 5: Empty
-            for _ in range(5):
-                file.readline()
+        parts = line.split("\t")
+        dimensions = len(parts[3].strip().replace("(", "").replace(")", "").split())
 
-            # Read first data line
-            line = file.readline()
-
-            # Skip empty lines until data is found
-            while line and line.strip() == "":
-                line = file.readline()
-
-            if not line:
-                messagebox.showerror("Error", "File contains no execution data.")
-                return None
-
+        while line:
+            s = line.strip()
+            if not s or s.startswith("P"):
+                break
             parts = line.split("\t")
+            if len(parts) < 5:
+                line = fh.readline()
+                continue
 
-            # Determine vertex dimensions based on the first coordinate found
-            dimensions = len(parts[3].strip().replace("(", "").replace(")", "").split())
+            node = tuple(
+                int(n)
+                for n in parts[3].strip().replace("(", "").replace(")", "").split()
+            )
+            iteration_id = int(parts[1])
+            iterations.append((iteration_id, node))
 
-            # Scan vertices
-            while line:
-                stripped_line = line.strip()
-                if not stripped_line or stripped_line.startswith("P"):
-                    break
+            vs = parts[4].strip()
+            if "g(" in vs:
+                vals = vs.split()
+                g_val = vals[0].replace("g(", "").replace(")", "")
+                h_val = vals[1].replace("h(", "").replace(")", "")
+                f_val = vals[2].replace("f(", "").replace(")", "")
+            else:
+                clean = vs.replace("(", "").replace(")", "").split()
+                g_val, h_val, f_val = clean[2], clean[5], clean[8]
 
-                parts = line.split("\t")
-                coord_str = parts[3].strip()
+            g_costs[node] = int(g_val)
+            h_costs[node] = int(h_val)
+            f_costs[node] = int(f_val)
+            line = fh.readline()
 
-                # Parse node coordinates
-                node = coord_str.replace("(", "").replace(")", "").split()
-                node = tuple(int(n) for n in node)
-
-                iteration_id = int(parts[1])
-                iterations.append((iteration_id, node))
-
-                # Parse f, g, and h costs
-                values_str = parts[4].strip()
-
-                if "g(" in values_str:
-                    # Format: g(90) h(82) f(172)
-                    vals = values_str.split()
-                    g_val = vals[0].replace("g(", "").replace(")", "")
-                    h_val = vals[1].replace("h(", "").replace(")", "")
-                    f_val = vals[2].replace("f(", "").replace(")", "")
-                else:
-                    # Format: g - 90 (h - 82 f - 172)
-                    clean_str = values_str.replace("(", "").replace(")", "")
-                    vals = clean_str.split()
-                    # Index mapping based on split: "g", "-", "90", "h", "-", "82"...
-                    g_val = vals[2]
-                    h_val = vals[5]
-                    f_val = vals[8]
-
-                g_costs[node] = int(g_val)
-                h_costs[node] = int(h_val)
-                f_costs[node] = int(f_val)
-
-                line = file.readline()
-
-            iterations.sort()
-
-            return {
-                'num_expansions': num_expansions,
-                'f': f_costs,
-                'g': g_costs,
-                'h': h_costs,
-                'jumps': jumps,
-                'num_jumps': 0,
-                'iterations': iterations,
-                'avg_h_neighbors': avg_h_neighbors,
-                'dimensions': dimensions
-            }
-
-    except FileNotFoundError:
-        messagebox.showerror("Error", "File not found.")
-        return None
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to process file:\n{e}")
-        return None
-
-
-def get_neighbors(vertex, neighbor_list, index):
-    """Recursively generates neighbors for a vertex."""
-    if index <= 0:
-        neighbor_list.append(vertex)
-        new_vertex = list(vertex)
-        new_vertex[index] += 1
-        neighbor_list.append(tuple(new_vertex))
-
-        if new_vertex[index] > 1:
-            new_vertex[index] -= 2
-            neighbor_list.append(tuple(new_vertex))
-        return neighbor_list
-
-    neighbor_list.append(vertex)
-    neighbor_list = get_neighbors(vertex, neighbor_list.copy(), index - 1)
-
-    new_vertex = list(vertex)
-    new_vertex[index] += 1
-    neighbor_list = get_neighbors(tuple(new_vertex), neighbor_list.copy(), index - 1)
-
-    if new_vertex[index] > 1:
-        new_vertex[index] -= 2
-        neighbor_list = get_neighbors(tuple(new_vertex), neighbor_list.copy(), index - 1)
-
-    return neighbor_list
+    iterations.sort()
+    return {
+        "f": f_costs,
+        "g": g_costs,
+        "h": h_costs,
+        "jumps": [],
+        "num_jumps": 0,
+        "iterations": iterations,
+        "dimensions": dimensions,
+        "num_expansions": {},
+    }
 
 
 def calculate_metrics(data):
-    """Calculates additional metrics (jumps, neighbors) from processed data."""
-    num_expansions = data['num_expansions']
-    h_costs = data['h']
-    iterations = data['iterations']
-    jumps = data['jumps']
-    avg_h_neighbors = data['avg_h_neighbors']
-    dimensions = data['dimensions']
+    iters = data["iterations"]
+    jumps = data["jumps"]
 
-    index = dimensions - 1
-    previous_node = None
-    jump_count = 0
+    def is_nb(a, b):
+        return all(abs(a[i] - b[i]) <= 1 for i in range(len(a)))
 
-    for _, vertex in iterations:
-        if vertex in num_expansions:
-            num_expansions[vertex] += 1
-        else:
-            num_expansions[vertex] = 1
-
-        neighbors = get_neighbors(vertex, [], index)
-        neighbors = list(dict.fromkeys(neighbors))  # Remove duplicates
-        if vertex in neighbors:
-            neighbors.remove(vertex)
-
-        if previous_node is not None:
-            if previous_node not in neighbors:
-                jump_count += 1
-                jumps.append((previous_node, vertex))
-
-        num_neighbors = 0
-        total_h = 0
-        for neighbor in neighbors:
-            if neighbor in h_costs:
-                total_h += h_costs[neighbor]
-                num_neighbors += 1
-
-        if num_neighbors == 0:
-            avg_h_neighbors[vertex] = -1
-        else:
-            avg_h_neighbors[vertex] = total_h / num_neighbors
-
-        previous_node = vertex
-
-    data['num_jumps'] = jump_count
+    prev = None
+    jc = 0
+    for _, v in iters:
+        data["num_expansions"][v] = data["num_expansions"].get(v, 0) + 1
+        if prev is not None and not is_nb(prev, v):
+            jc += 1
+            jumps.append((prev, v))
+        prev = v
+    data["num_jumps"] = jc
     return data
 
 
-def generate_plot(data, show_projections=True):
-    """Generates the 3D visualization plot"""
-    iterations = data['iterations']
-    dimensions = data['dimensions']
+# ─────────────────────────────────────────────
+#  SHARED PLOT HELPERS
+# ─────────────────────────────────────────────
 
-    if dimensions > 3:
-        messagebox.showinfo("Warning", f"File has {dimensions} dimensions. Only 3D graphs are supported.")
-        return None
 
-    x_vals = []
-    y_vals = []
-    z_vals = []
-    times = []
+def _style(ax):
+    ax.set_facecolor("white")
+    ax.tick_params(colors="black", labelsize=8)
+    ax.xaxis.label.set_color("black")
+    ax.yaxis.label.set_color("black")
+    if hasattr(ax, "zaxis"):
+        ax.zaxis.label.set_color("black")
+    ax.title.set_color("black")
+    for sp in ax.spines.values():
+        sp.set_edgecolor("#aaaaaa")
+    ax.grid(True, color=P["grid"], linewidth=0.5)
 
-    for timestamp, node in iterations:
-        x_vals.append(node[0])
-        y_vals.append(node[1])
-        z_vals.append(node[2])
-        times.append(timestamp)
 
-    x_vals = np.array(x_vals)
-    y_vals = np.array(y_vals)
-    z_vals = np.array(z_vals)
-    times = np.array(times)
+def _cbar(fig, im, ax, label=""):
+    cb = fig.colorbar(im, ax=ax, pad=0.02)
+    cb.set_label(label, color="black", fontsize=8)
+    cb.ax.yaxis.set_tick_params(color="black")
+    plt.setp(cb.ax.yaxis.get_ticklabels(), color="black")
 
-    if show_projections:
-        # Create figure with 2x2 grid: 3D plot + 3 projections
-        fig = plt.figure(figsize=(14, 10))
 
-        # Main 3D plot (top-left, larger)
-        ax3d = fig.add_subplot(2, 2, 1, projection='3d')
-    else:
-        # Create figure with only 3D plot
-        fig = plt.figure(figsize=(10, 8))
-        ax3d = fig.add_subplot(1, 1, 1, projection='3d')
+def _extract(data):
+    iters = data["iterations"]
+    x = np.array([n[0] for _, n in iters])
+    y = np.array([n[1] for _, n in iters])
+    z = np.array([n[2] for _, n in iters])
+    t = np.array([ts for ts, _ in iters])
+    h = np.array([data["h"].get(n, np.nan) for _, n in iters])
+    g = np.array([data["g"].get(n, np.nan) for _, n in iters])
+    mc = (x + y + z) / 3.0
+    dev = np.sqrt((x - mc) ** 2 + (y - mc) ** 2 + (z - mc) ** 2)
+    return x, y, z, t, h, g, dev
 
-    scatter3d = ax3d.scatter(x_vals, y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10)
-    ax3d.set_xlabel("Sequence A (i)")
-    ax3d.set_ylabel("Sequence B (j)")
-    ax3d.set_zlabel("Sequence C (k)")
+
+def _h2d(x, y, bins=80):
+    return np.histogram2d(x, y, bins=bins)
+
+
+def _rolling(arr, W, fn):
+    out = []
+    for i in range(len(arr)):
+        lo, hi = max(0, i - W // 2), min(len(arr), i + W // 2)
+        v = arr[lo:hi]
+        v = v[~np.isnan(v)]
+        out.append(fn(v) if len(v) else np.nan)
+    return np.array(out)
+
+
+# ─────────────────────────────────────────────
+#  PLOT GENERATORS
+# ─────────────────────────────────────────────
+
+
+def plot_classic(data, label=""):
+    x, y, z, t, *_ = _extract(data)
+    fig = plt.figure(figsize=(14, 10), facecolor="white")
+    if label:
+        fig.suptitle(label, fontsize=11, fontweight="bold")
+
+    ax3d = fig.add_subplot(2, 2, 1, projection="3d")
+    ax3d.set_facecolor("white")
+    sc = ax3d.scatter(x, y, z, c=t, cmap="plasma", s=10)
+    ax3d.set_xlabel("Seq A (i)")
+    ax3d.set_ylabel("Seq B (j)")
+    ax3d.set_zlabel("Seq C (k)")
     ax3d.set_title("3D View")
+    ax3d.tick_params(colors="black")
 
-    if show_projections:
-        # XY Projection (top-right)
-        ax_xy = fig.add_subplot(2, 2, 2)
-        scatter_xy = ax_xy.scatter(x_vals, y_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-        ax_xy.set_xlabel("Sequence A (i)")
-        ax_xy.set_ylabel("Sequence B (j)")
-        ax_xy.text(-0.15, 0.5, "XY Projection (Top View)", transform=ax_xy.transAxes,
-                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
-        ax_xy.grid(True, linestyle='--', alpha=0.5)
+    def _proj(pos, xd, yd, xl, yl, sl):
+        ax = fig.add_subplot(pos)
+        ax.scatter(xd, yd, c=t, cmap="plasma", s=10, alpha=0.7)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.text(
+            -0.15,
+            0.5,
+            sl,
+            transform=ax.transAxes,
+            fontsize=9,
+            fontweight="bold",
+            va="center",
+            ha="center",
+            rotation=90,
+        )
+        d = np.abs(xd - yd) / np.sqrt(2)
+        ax.text(
+            0.02,
+            0.98,
+            f"Band width: {np.max(d) - np.min(d):.1f}",
+            transform=ax.transAxes,
+            fontsize=9,
+            va="top",
+            bbox={"boxstyle": "round", "facecolor": "#eeeeee", "alpha": 0.8},
+        )
+        _style(ax)
 
-        # Calculate and display band width for XY
-        if len(x_vals) > 0:
-            # Band width as perpendicular distance from diagonal
-            diag_dist_xy = np.abs(x_vals - y_vals) / np.sqrt(2)
-            band_width_xy = np.max(diag_dist_xy) - np.min(diag_dist_xy)
-            ax_xy.text(0.02, 0.98, f"Band width: {band_width_xy:.1f}",
-                       transform=ax_xy.transAxes, fontsize=9,
-                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    _proj(222, x, y, "Seq A (i)", "Seq B (j)", "XY (Top)")
+    _proj(223, x, z, "Seq A (i)", "Seq C (k)", "XZ (Front)")
+    _proj(224, y, z, "Seq B (j)", "Seq C (k)", "YZ (Side)")
 
-        # XZ Projection (bottom-left)
-        ax_xz = fig.add_subplot(2, 2, 3)
-        scatter_xz = ax_xz.scatter(x_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-        ax_xz.set_xlabel("Sequence A (i)")
-        ax_xz.set_ylabel("Sequence C (k)")
-        ax_xz.text(-0.15, 0.5, "XZ Projection (Front View)", transform=ax_xz.transAxes,
-                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
-        ax_xz.grid(True, linestyle='--', alpha=0.5)
+    ca = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cb = fig.colorbar(sc, cax=ca)
+    cb.set_label("Iteration")
+    plt.tight_layout(rect=[0, 0, 0.90, 0.96])
+    return fig
 
-        # Calculate and display band width for XZ
-        if len(x_vals) > 0:
-            diag_dist_xz = np.abs(x_vals - z_vals) / np.sqrt(2)
-            band_width_xz = np.max(diag_dist_xz) - np.min(diag_dist_xz)
-            ax_xz.text(0.02, 0.98, f"Band width: {band_width_xz:.1f}",
-                       transform=ax_xz.transAxes, fontsize=9,
-                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-        # YZ Projection (bottom-right)
-        ax_yz = fig.add_subplot(2, 2, 4)
-        scatter_yz = ax_yz.scatter(y_vals, z_vals, c=times, cmap='viridis', marker='o', s=10, alpha=0.7)
-        ax_yz.set_xlabel("Sequence B (j)")
-        ax_yz.set_ylabel("Sequence C (k)")
-        ax_yz.text(-0.15, 0.5, "YZ Projection (Side View)", transform=ax_yz.transAxes,
-                   fontsize=10, fontweight='bold', va='center', ha='center', rotation=90)
-        ax_yz.grid(True, linestyle='--', alpha=0.5)
+def plot_density(data, label=""):
+    x, y, z, *_ = _extract(data)
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5), facecolor="white")
+    title = "Exploration Density  —  brighter = more nodes visited"
+    fig.suptitle(
+        f"[{label}]  {title}" if label else title, fontsize=12, fontweight="bold"
+    )
 
-        # Calculate and display band width for YZ
-        if len(y_vals) > 0:
-            diag_dist_yz = np.abs(y_vals - z_vals) / np.sqrt(2)
-            band_width_yz = np.max(diag_dist_yz) - np.min(diag_dist_yz)
-            ax_yz.text(0.02, 0.98, f"Band width: {band_width_yz:.1f}",
-                       transform=ax_yz.transAxes, fontsize=9,
-                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    for ax, (xd, yd, xl, yl, tt) in zip(
+        axes,
+        [
+            (x, y, "Seq A (i)", "Seq B (j)", "XY (Top)"),
+            (x, z, "Seq A (i)", "Seq C (k)", "XZ (Front)"),
+            (y, z, "Seq B (j)", "Seq C (k)", "YZ (Side)"),
+        ],
+    ):
+        H, xe, ye = _h2d(xd, yd)
+        Hm = np.ma.masked_where(H == 0, H)
+        im = ax.pcolormesh(
+            xe, ye, Hm.T, cmap="plasma", norm=LogNorm(vmin=1, vmax=max(H.max(), 1))
+        )
+        lim = max(xe[-1], ye[-1])
+        ax.plot([0, lim], [0, lim], color=P["b"], lw=1.2, linestyle="--", alpha=0.7)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(tt)
+        _style(ax)
+        _cbar(fig, im, ax, "Node visits (log)")
 
-        # Add colorbar for the entire figure
-        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-        colorbar = fig.colorbar(scatter3d, cax=cbar_ax)
-        colorbar.set_label('Iteration')
+    plt.tight_layout()
+    return fig
 
-        plt.tight_layout(rect=[0, 0, 0.90, 1])
+
+def plot_dynamics(data, label=""):
+    iters = data["iterations"]
+    h_map = data["h"]
+    jumps = data["jumps"]
+
+    h_vals = np.array([h_map.get(n, np.nan) for _, n in iters], dtype=float)
+    n = len(h_vals)
+    xn = np.linspace(0, 1, n)
+    W = max(50, n // 100)
+
+    min_h = _rolling(h_vals, W, np.min)
+    avg_h = _rolling(h_vals, W, np.mean)
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), facecolor="white")
+    title = "Search Dynamics"
+    fig.suptitle(
+        f"[{label}]  {title}" if label else title, fontsize=14, fontweight="bold"
+    )
+
+    ax = axes[0, 0]
+    ax.plot(xn, min_h, color=P["b"], lw=1.4, label=f"min h  (W={W})")
+    ax.set_xlabel("Normalised progress")
+    ax.set_ylabel("min h(n)")
+    ax.set_title("Minimum h(n) — proxy for OPEN frontier quality")
+    ax.legend(facecolor="white")
+    _style(ax)
+
+    ax = axes[0, 1]
+    ax.plot(xn, avg_h, color=P["a"], lw=1.4, label=f"avg h  (W={W})")
+    ax.set_xlabel("Normalised progress")
+    ax.set_ylabel("avg h(n)")
+    ax.set_title("Average h(n) — frontier informativeness")
+    ax.legend(facecolor="white")
+    _style(ax)
+
+    ax = axes[1, 0]
+    if jumps:
+        dists = [sum(abs(b[i] - a[i]) for i in range(len(a))) for a, b in jumps]
+        ax.hist(dists, bins=40, color=P["a"], edgecolor="white", alpha=0.85)
+        md = np.mean(dists)
+        ax.axvline(md, color=P["b"], lw=1.6, linestyle="--", label=f"Mean: {md:.1f}")
+        ax.set_xlabel("Jump distance (Manhattan)")
+        ax.set_ylabel("Count")
+        ax.set_title(f"Jump Distance Distribution  (n={len(jumps):,})  —  L1 metric")
+        ax.legend(facecolor="white")
     else:
-        # Add colorbar for 3D only view
-        colorbar = fig.colorbar(scatter3d, ax=ax3d, shrink=0.6, pad=0.1)
-        colorbar.set_label('Iteration')
+        ax.text(
+            0.5,
+            0.5,
+            "No jumps recorded",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+        ax.set_title("Jump Distance Distribution")
+    _style(ax)
 
-        plt.tight_layout()
+    ax = axes[1, 1]
+    if jumps:
+        prev = None
+        jxs = []
+        for idx, (_, node) in enumerate(iters):
+            if prev is not None and not all(
+                abs(node[i] - prev[i]) <= 1 for i in range(len(node))
+            ):
+                jxs.append(idx / max(n - 1, 1))
+            prev = node
+        jxs = np.array(jxs)
+        cum = np.arange(1, len(jxs) + 1)
+        ax.plot(jxs, cum, color=P["warn"], lw=1.5)
+        ax.fill_between(jxs, cum, alpha=0.12, color=P["warn"])
+        ax.set_xlabel("Normalised progress")
+        ax.set_ylabel("Cumulative jumps")
+        ax.set_title("Cumulative Jumps  —  flat slope = focused search")
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No jumps recorded",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+        ax.set_title("Cumulative Jumps")
+    _style(ax)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_band(data, label=""):
+    _, _, _, t, _, _, dev = _extract(data)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), facecolor="white")
+    title = "Diagonal Band Deviation  —  distance from line i = j = k"
+    fig.suptitle(
+        f"[{label}]  {title}" if label else title, fontsize=12, fontweight="bold"
+    )
+
+    ax = axes[0]
+    sc = ax.scatter(t, dev, s=3, c=dev, cmap="plasma", alpha=0.4)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Deviation from diagonal")
+    ax.set_title("Deviation per Node")
+    _style(ax)
+    _cbar(fig, sc, ax, "Deviation")
+
+    ax = axes[1]
+    ax.hist(dev, bins=60, color=P["a"], edgecolor="white", alpha=0.85)
+    ax.axvline(
+        np.mean(dev),
+        color=P["b"],
+        lw=1.8,
+        linestyle="--",
+        label=f"Mean: {np.mean(dev):.1f}",
+    )
+    ax.axvline(
+        np.median(dev),
+        color=P["warn"],
+        lw=1.8,
+        linestyle=":",
+        label=f"Median: {np.median(dev):.1f}",
+    )
+    ax.set_xlabel("Deviation")
+    ax.set_ylabel("Count")
+    ax.set_title("Deviation Distribution  —  narrow peak = tight search band")
+    ax.legend(facecolor="white")
+    _style(ax)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_footprint(da, db, la="A", lb="B"):
+    xA, yA, zA, *_ = _extract(da)
+    xB, yB, zB, *_ = _extract(db)
+
+    BINS = 80
+    fig = plt.figure(figsize=(18, 12), facecolor="white")
+    fig.suptitle(
+        f"Search Footprint  ·  A = {la}  vs  B = {lb}\n"
+        "Blue = A visited more  |  Red = B visited more  |  White = equal",
+        fontsize=12,
+        fontweight="bold",
+    )
+    gs = gridspec.GridSpec(3, 3, figure=fig, hspace=0.42, wspace=0.30)
+
+    for row, (xda, yda, xdb, ydb, xl, yl, tt) in enumerate(
+        [
+            (xA, yA, xB, yB, "Seq A (i)", "Seq B (j)", "XY (Top)"),
+            (xA, zA, xB, zB, "Seq A (i)", "Seq C (k)", "XZ (Front)"),
+            (yA, zA, yB, zB, "Seq B (j)", "Seq C (k)", "YZ (Side)"),
+        ]
+    ):
+        all_x = np.concatenate([xda, xdb])
+        all_y = np.concatenate([yda, ydb])
+        rng = [[all_x.min(), all_x.max()], [all_y.min(), all_y.max()]]
+        HA, xe, ye = np.histogram2d(xda, yda, bins=BINS, range=rng)
+        HB, _, _ = np.histogram2d(xdb, ydb, bins=BINS, range=rng)
+        vmax = max(HA.max(), HB.max(), 1)
+        dlim = max(xe[-1], ye[-1])
+
+        def _dg(ax, dlim=dlim):
+            ax.plot(
+                [0, dlim], [0, dlim], color="gray", lw=0.8, linestyle="--", alpha=0.5
+            )
+
+        ax = fig.add_subplot(gs[row, 0])
+        Hm = np.ma.masked_where(HA == 0, HA)
+        im = ax.pcolormesh(xe, ye, Hm.T, cmap="plasma", norm=LogNorm(vmin=1, vmax=vmax))
+        _dg(ax)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(
+            f"{tt}  ·  A: {la}\n({len(xda):,} nodes)", color=P["a"], fontsize=9
+        )
+        _style(ax)
+        _cbar(fig, im, ax, "visits (log)")
+
+        ax = fig.add_subplot(gs[row, 1])
+        Hm = np.ma.masked_where(HB == 0, HB)
+        im = ax.pcolormesh(xe, ye, Hm.T, cmap="plasma", norm=LogNorm(vmin=1, vmax=vmax))
+        _dg(ax)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(
+            f"{tt}  ·  B: {lb}\n({len(xdb):,} nodes)", color=P["b"], fontsize=9
+        )
+        _style(ax)
+        _cbar(fig, im, ax, "visits (log)")
+
+        HAn = HA / max(HA.sum(), 1)
+        HBn = HB / max(HB.sum(), 1)
+        diff = HBn - HAn
+        amax = max(np.abs(diff).max(), 1e-9)
+        ax = fig.add_subplot(gs[row, 2])
+        im = ax.pcolormesh(
+            xe,
+            ye,
+            diff.T,
+            cmap="RdBu_r",
+            norm=TwoSlopeNorm(vmin=-amax, vcenter=0, vmax=amax),
+        )
+        _dg(ax)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(
+            f"{tt}  ·  Difference (B−A)\nBlue=A more  |  Red=B more", fontsize=9
+        )
+        _style(ax)
+        _cbar(fig, im, ax, "density diff")
 
     return fig
 
 
-class PAStarGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("PA-Star Runtime Visualizer")
-        self.root.geometry("1200x900")
+def plot_comparison(da, db, la="A", lb="B"):
+    _, _, _, tA, hA, _, devA = _extract(da)
+    _, _, _, tB, hB, _, devB = _extract(db)
 
-        self.data = None
-        self.current_figure = None
+    fig = plt.figure(figsize=(16, 13), facecolor="white")
+    fig.suptitle(
+        f"Comparison  ·  A = {la}  vs  B = {lb}", fontsize=14, fontweight="bold"
+    )
+    gs = gridspec.GridSpec(3, 4, figure=fig, hspace=0.50, wspace=0.38)
 
-        button_frame = tk.Frame(root)
-        button_frame.pack(pady=10)
+    W_a = max(50, len(hA) // 100)
+    W_b = max(50, len(hB) // 100)
+    min_hA = _rolling(hA, W_a, np.min)
+    min_hB = _rolling(hB, W_b, np.min)
+    avg_hA = _rolling(hA, W_a, np.mean)
+    avg_hB = _rolling(hB, W_b, np.mean)
 
-        self.btn_open = tk.Button(button_frame, text="Open Log File",
-                                  command=self.open_file,
-                                  font=("Arial", 12),
-                                  bg="#4CAF50", fg="white",
-                                  padx=20, pady=10)
-        self.btn_open.pack(side=tk.LEFT, padx=5)
+    ax = fig.add_subplot(gs[0, 0:2])
+    ax.plot(
+        np.linspace(0, 1, len(min_hA)), min_hA, color=P["a"], lw=1.5, label=f"A: {la}"
+    )
+    ax.plot(
+        np.linspace(0, 1, len(min_hB)), min_hB, color=P["b"], lw=1.5, label=f"B: {lb}"
+    )
+    ax.set_xlabel("Normalised progress")
+    ax.set_ylabel("min h(n)")
+    ax.set_title("Frontier Quality  (min h)\nlower = closer to goal sooner")
+    ax.legend(facecolor="white")
+    _style(ax)
 
-        self.btn_save = tk.Button(button_frame, text="Save Image",
-                                  command=self.save_image,
-                                  font=("Arial", 12),
-                                  bg="#2196F3", fg="white",
-                                  padx=20, pady=10,
-                                  state=tk.DISABLED)
-        self.btn_save.pack(side=tk.LEFT, padx=5)
+    ax = fig.add_subplot(gs[0, 2:4])
+    ax.plot(
+        np.linspace(0, 1, len(avg_hA)), avg_hA, color=P["a"], lw=1.5, label=f"A: {la}"
+    )
+    ax.plot(
+        np.linspace(0, 1, len(avg_hB)), avg_hB, color=P["b"], lw=1.5, label=f"B: {lb}"
+    )
+    ax.set_xlabel("Normalised progress")
+    ax.set_ylabel("avg h(n)")
+    ax.set_title("Frontier Informativeness  (avg h)")
+    ax.legend(facecolor="white")
+    _style(ax)
 
-        # Checkbox for projections
-        self.show_projections_var = tk.BooleanVar(value=True)
-        self.chk_projections = tk.Checkbutton(button_frame, text="Show Projections",
-                                              variable=self.show_projections_var,
-                                              command=self.on_projection_toggle,
-                                              font=("Arial", 11))
-        self.chk_projections.pack(side=tk.LEFT, padx=15)
+    ax = fig.add_subplot(gs[1, 0:2])
+    ax.hist(devA, bins=60, color=P["a"], alpha=0.55, density=True, label=f"A: {la}")
+    ax.hist(devB, bins=60, color=P["b"], alpha=0.55, density=True, label=f"B: {lb}")
+    ax.axvline(
+        np.mean(devA),
+        color=P["a"],
+        lw=1.6,
+        linestyle="--",
+        label=f"mean A: {np.mean(devA):.1f}",
+    )
+    ax.axvline(
+        np.mean(devB),
+        color=P["b"],
+        lw=1.6,
+        linestyle="--",
+        label=f"mean B: {np.mean(devB):.1f}",
+    )
+    ax.set_xlabel("Deviation")
+    ax.set_ylabel("Density")
+    ax.set_title("Band Deviation  (overlaid)")
+    ax.legend(facecolor="white", fontsize=8)
+    _style(ax)
 
-        self.status_label = tk.Label(root, text="Waiting for file...", font=("Arial", 10))
-        self.status_label.pack(pady=5)
+    ax = fig.add_subplot(gs[1, 2:4])
+    ja = da["jumps"]
+    jb = db["jumps"]
+    if ja and jb:
+        dA = [sum(abs(b[i] - a[i]) for i in range(len(a))) for a, b in ja]
+        dB = [sum(abs(b[i] - a[i]) for i in range(len(a))) for a, b in jb]
+        ax.hist(dA, bins=40, color=P["a"], alpha=0.55, density=True, label=f"A: {la}")
+        ax.hist(dB, bins=40, color=P["b"], alpha=0.55, density=True, label=f"B: {lb}")
+        ax.axvline(
+            np.mean(dA),
+            color=P["a"],
+            lw=1.6,
+            linestyle="--",
+            label=f"mean A: {np.mean(dA):.1f}",
+        )
+        ax.axvline(
+            np.mean(dB),
+            color=P["b"],
+            lw=1.6,
+            linestyle="--",
+            label=f"mean B: {np.mean(dB):.1f}",
+        )
+    ax.set_xlabel("Jump distance (Manhattan)")
+    ax.set_ylabel("Density")
+    ax.set_title("Jump Distance  (overlaid)")
+    ax.legend(facecolor="white", fontsize=8)
+    _style(ax)
 
-        self.graph_frame = tk.Frame(root)
-        self.graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    # absolute bars
+    ax_bar = fig.add_subplot(gs[2, 0:2])
+    metrics = [
+        ("Nodes\nexplored", len(tA), len(tB)),
+        ("Jumps", da["num_jumps"], db["num_jumps"]),
+        ("Mean\ndeviation", round(np.mean(devA), 1), round(np.mean(devB), 1)),
+    ]
+    names = [m[0] for m in metrics]
+    va_arr = np.array([m[1] for m in metrics], dtype=float)
+    vb_arr = np.array([m[2] for m in metrics], dtype=float)
+    xp = np.arange(len(names))
+    w = 0.35
+    ba = ax_bar.bar(xp - w / 2, va_arr, w, color=P["a"], alpha=0.85, label=f"A: {la}")
+    bb = ax_bar.bar(xp + w / 2, vb_arr, w, color=P["b"], alpha=0.85, label=f"B: {lb}")
+    for bar, val in list(zip(ba, va_arr)) + list(zip(bb, vb_arr)):
+        ax_bar.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() * 1.01,
+            f"{val:,.0f}" if val >= 10 else f"{val:.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+    ax_bar.set_xticks(xp)
+    ax_bar.set_xticklabels(names, fontsize=9)
+    ax_bar.set_ylabel("Absolute value")
+    ax_bar.set_title("Absolute Metrics")
+    ax_bar.legend(facecolor="white")
+    _style(ax_bar)
 
-    def open_file(self):
-        filepath = filedialog.askopenfilename(
-            title="Select Log File",
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+    # improvement table
+    ax_tbl = fig.add_subplot(gs[2, 2:4])
+    ax_tbl.set_facecolor("white")
+    for sp in ax_tbl.spines.values():
+        sp.set_edgecolor("#aaaaaa")
+    ax_tbl.set_xticks([])
+    ax_tbl.set_yticks([])
+
+    def _pct(a, b):
+        if a == 0:
+            return "N/A"
+        r = (a - b) / a * 100
+        return f"{'−' if r >= 0 else '+'}{abs(r):.1f} %"
+
+    rows = [
+        ("Metric", f"A: {la}", f"B: {lb}", "Reduction"),
+        ("Nodes explored", f"{len(tA):,}", f"{len(tB):,}", _pct(len(tA), len(tB))),
+        (
+            "Jumps",
+            f"{da['num_jumps']:,}",
+            f"{db['num_jumps']:,}",
+            _pct(da["num_jumps"], db["num_jumps"]),
+        ),
+        (
+            "Mean deviation",
+            f"{np.mean(devA):.1f}",
+            f"{np.mean(devB):.1f}",
+            _pct(np.mean(devA), np.mean(devB)),
+        ),
+    ]
+    col_xs = [0.02, 0.27, 0.52, 0.76]
+    row_ys = [0.88, 0.70, 0.52, 0.34]
+
+    for ci, (cx, hdr) in enumerate(zip(col_xs, rows[0])):
+        ax_tbl.text(
+            cx,
+            0.95,
+            hdr,
+            transform=ax_tbl.transAxes,
+            color="#444444",
+            fontsize=9,
+            fontweight="bold",
+            va="top",
         )
 
-        if not filepath:
-            return
-
-        self.status_label.config(text="Processing file...")
-        self.root.update()
-
-        raw_data = process_log_file(filepath)
-        if raw_data is None:
-            self.status_label.config(text="Error processing file")
-            return
-
-        processed_data = calculate_metrics(raw_data)
-        self.data = processed_data
-
-        fig = generate_plot(processed_data, self.show_projections_var.get())
-        if fig is None:
-            self.status_label.config(text="Error generating graph")
-            return
-
-        self.current_figure = fig
-
-        # Clear previous graph
-        for widget in self.graph_frame.winfo_children():
-            widget.destroy()
-
-        canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        self.btn_save.config(state=tk.NORMAL)
-
-        num_iterations = len(processed_data['iterations'])
-        num_jumps = processed_data['num_jumps']
-        self.status_label.config(
-            text=f"File processed! Iterations: {num_iterations} | Jumps: {num_jumps}"
+    for ri, row in enumerate(rows[1:]):
+        metric, va, vb, pct_str = row
+        y = row_ys[ri]
+        ax_tbl.text(
+            col_xs[0],
+            y,
+            metric,
+            transform=ax_tbl.transAxes,
+            color="black",
+            fontsize=9,
+            va="top",
+        )
+        ax_tbl.text(
+            col_xs[1],
+            y,
+            va,
+            transform=ax_tbl.transAxes,
+            color=P["a"],
+            fontsize=9,
+            va="top",
+        )
+        ax_tbl.text(
+            col_xs[2],
+            y,
+            vb,
+            transform=ax_tbl.transAxes,
+            color=P["b"],
+            fontsize=9,
+            va="top",
+        )
+        an = float(rows[ri + 1][1].replace(",", ""))
+        bn = float(rows[ri + 1][2].replace(",", ""))
+        ax_tbl.text(
+            col_xs[3],
+            y,
+            pct_str,
+            transform=ax_tbl.transAxes,
+            fontsize=9,
+            fontweight="bold",
+            color=P["b"] if bn <= an else P["warn"],
+            va="top",
         )
 
-    def on_projection_toggle(self):
-        """Callback when projection checkbox is toggled."""
-        if self.data is None:
-            return
+    ax_tbl.axhline(0.88, color="#aaaaaa", lw=0.8, transform=ax_tbl.transAxes)
+    ax_tbl.set_title("Improvement Table  (B vs A)")
+    return fig
 
-        fig = generate_plot(self.data, self.show_projections_var.get())
-        if fig is None:
-            return
 
-        self.current_figure = fig
+# ─────────────────────────────────────────────
+#  WORKER THREAD
+# ─────────────────────────────────────────────
 
-        # Clear previous graph
-        for widget in self.graph_frame.winfo_children():
-            widget.destroy()
 
-        canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+class RenderWorker(QObject):
+    """Runs one plot generator in a background thread and emits the result."""
 
-    def save_image(self):
-        if self.current_figure is None:
-            messagebox.showwarning("Warning", "No graph to save!")
-            return
+    done = pyqtSignal(str, object)  # (tab_key, figure)
+    error = pyqtSignal(str, str)  # (tab_key, error_message)
+    status = pyqtSignal(str)  # status bar text
 
-        filepath = filedialog.asksaveasfilename(
-            title="Save Image As",
-            defaultextension=".png",
-            filetypes=[
-                ("PNG", "*.png"),
-                ("JPEG", "*.jpg"),
-                ("PDF", "*.pdf"),
-                ("SVG", "*.svg"),
-                ("All Files", "*.*")
-            ]
-        )
+    def __init__(self, tab_key, fn, *args, **kwargs):
+        super().__init__()
+        self.tab_key = tab_key
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
 
-        if not filepath:
-            return
-
+    def run(self):
+        self.status.emit(f"Rendering {self.tab_key}…")
         try:
-            self.current_figure.savefig(filepath, dpi=300, bbox_inches='tight')
-            messagebox.showinfo("Success", f"Image saved at:\n{filepath}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save image:\n{e}")
+            fig = self.fn(*self.args, **self.kwargs)
+            self.done.emit(self.tab_key, fig)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+            self.error.emit(self.tab_key, traceback.format_exc())
+
+
+# ─────────────────────────────────────────────
+#  CANVAS WIDGET
+# ─────────────────────────────────────────────
+
+
+class PlotCanvas(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout_ = QVBoxLayout(self)
+        self.layout_.setContentsMargins(0, 0, 0, 0)
+        self._canvas = None
+        self._fig = None
+
+    def set_figure(self, fig):
+        if self._canvas:
+            self.layout_.removeWidget(self._canvas)
+            self._canvas.deleteLater()
+            plt.close(self._fig)
+        self._fig = fig
+        self._canvas = FigureCanvas(fig)
+        self._canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.layout_.addWidget(self._canvas)
+        self._canvas.draw()
+
+    def figure(self):
+        return self._fig
+
+
+# ─────────────────────────────────────────────
+#  MAIN WINDOW
+# ─────────────────────────────────────────────
+
+TAB_DEFS = [
+    ("classic", "3D + Projections"),
+    ("density", "Exploration Density"),
+    ("dynamics", "Search Dynamics"),
+    ("band", "Band Deviation"),
+    ("footprint", "Search Footprint"),
+    ("compare", "Comparison"),
+]
+SINGLE_TABS = ["classic", "density", "dynamics", "band"]
+DUAL_TABS = ["footprint", "compare"]
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PA-Star Runtime Visualizer")
+        self.resize(1400, 950)
+
+        self.data_a = None
+        self.label_a = "A"
+        self.data_b = None
+        self.label_b = "B"
+        self.showing = "a"  # which file single-file tabs display
+
+        self._threads = []  # keep references so GC doesn't kill them
+        self._canvases = {}  # key -> PlotCanvas
+
+        self._build_ui()
+
+    # ── UI ───────────────────────────────────
+
+    def _build_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        root_layout = QVBoxLayout(central)
+        root_layout.setSpacing(4)
+        root_layout.setContentsMargins(10, 8, 10, 6)
+
+        # button bar
+        btn_row = QHBoxLayout()
+
+        def mkbtn(text, color, slot):
+            b = QPushButton(text)
+            b.setFont(QFont("Arial", 10, QFont.Bold))
+            b.setStyleSheet(
+                f"QPushButton{{background:{color};color:white;border:none;"
+                f"padding:6px 14px;border-radius:4px;}}"
+                f"QPushButton:hover{{background:{color};opacity:0.85;}}"
+            )
+            b.clicked.connect(slot)
+            return b
+
+        btn_row.addWidget(mkbtn("📂 Open A", P["a"], self.open_a))
+        btn_row.addWidget(mkbtn("📂 Open B", P["b"], self.open_b))
+        btn_row.addSpacing(20)
+        btn_row.addWidget(mkbtn("💾 Save current tab", "#555555", self.save_current))
+        btn_row.addWidget(mkbtn("💾 Export all tabs", "#333333", self.export_all))
+        btn_row.addStretch()
+        root_layout.addLayout(btn_row)
+
+        # file labels
+        lbl_row = QHBoxLayout()
+        self.lbl_a = QLabel("A: —")
+        self.lbl_a.setFont(QFont("Arial", 9, QFont.Bold))
+        self.lbl_a.setStyleSheet(f"color:{P['a']}")
+        self.lbl_b = QLabel("B: —")
+        self.lbl_b.setFont(QFont("Arial", 9, QFont.Bold))
+        self.lbl_b.setStyleSheet(f"color:{P['b']}")
+        lbl_row.addWidget(self.lbl_a)
+        lbl_row.addSpacing(30)
+        lbl_row.addWidget(self.lbl_b)
+        lbl_row.addStretch()
+        root_layout.addLayout(lbl_row)
+
+        # AB switcher
+        sw_row = QHBoxLayout()
+        sw_row.addWidget(QLabel("Viewing in single-file tabs:"))
+        self.rb_a = QRadioButton("A")
+        self.rb_a.setChecked(True)
+        self.rb_b = QRadioButton("B")
+        self.rb_a.setStyleSheet(f"color:{P['a']};font-weight:bold")
+        self.rb_b.setStyleSheet(f"color:{P['b']};font-weight:bold")
+        self._rb_group = QButtonGroup()
+        self._rb_group.addButton(self.rb_a)
+        self._rb_group.addButton(self.rb_b)
+        self.rb_a.toggled.connect(self._on_switch)
+        sw_row.addWidget(self.rb_a)
+        sw_row.addWidget(self.rb_b)
+        sw_row.addStretch()
+        root_layout.addLayout(sw_row)
+
+        # status
+        self.status_lbl = QLabel("Open a log file to begin.")
+        self.status_lbl.setFont(QFont("Arial", 9))
+        self.status_lbl.setStyleSheet("color:#444444")
+        root_layout.addWidget(self.status_lbl)
+
+        # tabs
+        self.tabs = QTabWidget()
+        self.tabs.setFont(QFont("Arial", 10))
+        root_layout.addWidget(self.tabs)
+
+        for key, label in TAB_DEFS:
+            canvas = PlotCanvas()
+            self._canvases[key] = canvas
+            self.tabs.addTab(canvas, label)
+
+    # ── helpers ──────────────────────────────
+
+    def _status(self, msg):
+        self.status_lbl.setText(msg)
+        QApplication.processEvents()
+
+    def _status_ready(self):
+        parts = []
+        if self.data_a:
+            parts.append(
+                f"A: {self.label_a}  {len(self.data_a['iterations']):,} nodes / {self.data_a['num_jumps']:,} jumps"
+            )
+        if self.data_b:
+            parts.append(
+                f"B: {self.label_b}  {len(self.data_b['iterations']):,} nodes / {self.data_b['num_jumps']:,} jumps"
+            )
+        self._status("   ·   ".join(parts) if parts else "Ready.")
+
+    def _single_data(self):
+        if self.showing == "b" and self.data_b is not None:
+            return self.data_b, self.label_b
+        if self.data_a is not None:
+            return self.data_a, self.label_a
+        return self.data_b, self.label_b
+
+    # ── rendering ────────────────────────────
+
+    def _render(self, tab_key, fn, *args):
+        """Spin up a QThread for one plot generator."""
+        thread = QThread()
+        worker = RenderWorker(tab_key, fn, *args)
+        worker.moveToThread(thread)
+
+        # wire signals
+        thread.started.connect(worker.run)
+        worker.status.connect(self._status)
+        worker.done.connect(self._on_render_done)
+        worker.error.connect(self._on_render_error)
+
+        # cleanup when thread finishes
+        worker.done.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        thread.finished.connect(thread.deleteLater)
+
+        self._threads.append(thread)  # prevent GC
+        thread.start()
+
+    def _on_render_done(self, key, fig):
+        self._canvases[key].set_figure(fig)
+        # clean finished threads
+        self._threads = [t for t in self._threads if t.isRunning()]
+        if not self._threads:
+            self._status_ready()
+
+    def _on_render_error(self, key, msg):
+        print(f"[render error — {key}]\n{msg}")
+        self._status(f"Error rendering {key} (see console).")
+        self._threads = [t for t in self._threads if t.isRunning()]
+
+    def _launch_single(self, data, label):
+        self._render("classic", plot_classic, data, label)
+        self._render("density", plot_density, data, label)
+        self._render("dynamics", plot_dynamics, data, label)
+        self._render("band", plot_band, data, label)
+
+    def _launch_dual(self):
+        self._render(
+            "footprint",
+            plot_footprint,
+            self.data_a,
+            self.data_b,
+            self.label_a,
+            self.label_b,
+        )
+        self._render(
+            "compare",
+            plot_comparison,
+            self.data_a,
+            self.data_b,
+            self.label_a,
+            self.label_b,
+        )
+
+    # ── file loading ─────────────────────────
+
+    def _load(self, fp, side):
+        name = os.path.basename(fp)
+        self._status(f"Parsing {name}…")
+        QApplication.processEvents()
+        try:
+            raw = process_log_file(fp)
+            data = calculate_metrics(raw)
+        except (OSError, TypeError, ValueError) as e:
+            QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
+            self._status("Error loading file.")
+            return
+
+        if side == "a":
+            self.data_a = data
+            self.label_a = name
+            self.lbl_a.setText(f"A: {name}")
+            self.rb_a.setChecked(True)
+            self.showing = "a"
+        else:
+            self.data_b = data
+            self.label_b = name
+            self.lbl_b.setText(f"B: {name}")
+            self.rb_b.setChecked(True)
+            self.showing = "b"
+
+        # launch renders
+        d, l = self._single_data()
+        self._launch_single(d, l)
+        if self.data_a and self.data_b:
+            self._launch_dual()
+
+    def open_a(self):
+        fp, _ = QFileDialog.getOpenFileName(
+            self, "Open Log — A", "", "Text Files (*.txt);;All Files (*)"
+        )
+        if fp:
+            self._load(fp, "a")
+
+    def open_b(self):
+        fp, _ = QFileDialog.getOpenFileName(
+            self, "Open Log — B", "", "Text Files (*.txt);;All Files (*)"
+        )
+        if fp:
+            self._load(fp, "b")
+
+    def _on_switch(self, checked):
+        if not checked:
+            return
+        self.showing = "a" if self.rb_a.isChecked() else "b"
+        d, l = self._single_data()
+        if d is not None:
+            self._launch_single(d, l)
+
+    # ── save / export ─────────────────────────
+
+    def save_current(self):
+        idx = self.tabs.currentIndex()
+        key = TAB_DEFS[idx][0]
+        fig = self._canvases[key].figure()
+        if fig is None:
+            QMessageBox.warning(self, "Warning", "No graph on the current tab.")
+            return
+        fp, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save current tab",
+            "",
+            "PNG (*.png);;PDF (*.pdf);;SVG (*.svg);;All Files (*)",
+        )
+        if not fp:
+            return
+        try:
+            fig.savefig(fp, dpi=300, bbox_inches="tight", facecolor="white")
+            QMessageBox.information(self, "Saved", f"Saved:\n{fp}")
+        except (OSError, TypeError, ValueError) as e:
+            QMessageBox.critical(self, "Error", f"Save failed:\n{e}")
+
+    def export_all(self):
+        has_any = any(self._canvases[k].figure() for k, _ in TAB_DEFS)
+        if not has_any:
+            QMessageBox.warning(self, "Warning", "No graphs loaded yet.")
+            return
+        folder = QFileDialog.getExistingDirectory(self, "Select export folder")
+        if not folder:
+            return
+
+        parts = []
+        if self.data_a:
+            parts.append(os.path.splitext(self.label_a)[0])
+        if self.data_b:
+            parts.append(os.path.splitext(self.label_b)[0])
+        prefix = "_vs_".join(parts) if parts else "pastar"
+
+        saved = []
+        failed = []
+        for key, _ in TAB_DEFS:
+            fig = self._canvases[key].figure()
+            if fig is None:
+                continue
+            fp = os.path.join(folder, f"{prefix}__{key}.png")
+            try:
+                fig.savefig(fp, dpi=300, bbox_inches="tight", facecolor="white")
+                saved.append(os.path.basename(fp))
+            except (OSError, TypeError, ValueError) as e:
+                failed.append(f"{key}: {e}")
+
+        msg = f"Exported {len(saved)} image(s) to:\n{folder}"
+        if saved:
+            msg += "\n\n" + "\n".join(saved)
+        if failed:
+            msg += "\n\nFailed:\n" + "\n".join(failed)
+        QMessageBox.information(self, "Export complete", msg)
+
+    def closeEvent(self, event):
+        # stop any running threads cleanly
+        for t in self._threads:
+            if t.isRunning():
+                t.quit()
+                t.wait(500)
+        event.accept()
+
+
+# ─────────────────────────────────────────────
+#  ENTRY POINT
+# ─────────────────────────────────────────────
 
 
 def main():
-    root = tk.Tk()
-    app = PAStarGUI(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
