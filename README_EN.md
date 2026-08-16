@@ -19,6 +19,9 @@ The tool efficiently handles logs containing millions of nodes using pure vector
 The application is structured into eight analytical tabs:
 
 ### 1. Executive Summary (`Summary`)
+
+![Executive Summary](assets/1fjlA_2all_vs_1fjlA_3all__summary.png)
+
 Complete dashboard with KPI cards and structured tables:
 - **Search Effort**: Total recorded expansions, nodes saved ($N_A - N_B$), and percentage reduction.
 - **Unique States & Deduplication**: Distinct state counts in A and B, common unique state intersection, exclusive states (Only A / Only B), and internal consistency checks for $h$ and $g$.
@@ -27,6 +30,9 @@ Complete dashboard with KPI cards and structured tables:
 - **Footprint Occupancy**: Occupied cell counts and Jaccard overlap for $XY$, $XZ$, and $YZ$ projections.
 
 ### 2. Search Savings (`Search Savings`)
+
+![Search Savings](assets/1fjlA_2all_vs_1fjlA_3all__savings.png)
+
 Effort reduction profiles across **Geometric Alignment Progress**:
 - *Cumulative Expanded Nodes by Geometric Progress* (A vs B).
 - *Cumulative Expansion Difference by Geometric Progress* ($cum_A - cum_B$).
@@ -34,32 +40,50 @@ Effort reduction profiles across **Geometric Alignment Progress**:
 - *Local Expansion Reduction (%)* and *Local Expansion Ratio (B / A)* with statistical support masking.
 
 ### 3. State Space Footprint (`Search Footprint`)
+
+![State Space Footprint](assets/1fjlA_2all_vs_1fjlA_3all__footprint.png)
+
 Generalized pairwise analysis across all $\binom{D}{2}$ projection pairs with matrix visualization:
 - **Pairwise Projections Matrix**: Upper-triangular matrix displaying the Absolute Expansion Difference for all projection pairs (e.g., 15 pairs for $D=6$).
 - **Detailed Pair View**: Interactive selector with 4 high-resolution heatmaps (A, B, Absolute Expansion Difference with zero-centered RdBu colormap, and Relative Density Difference).
 - Dynamic occupancy and Jaccard overlap table for all pairs.
 
 ### 4. Heuristic Behaviour (`Heuristic Behaviour`)
+
+![Heuristic Behaviour](assets/1fjlA_2all_vs_1fjlA_3all__heuristic.png)
+
 Detailed evaluation function analysis across $D$-dimensional geometric space:
 - Profiles of $h(n)$, $g(n)$, and $f(n)$ across geometric progress (medians and P25/P75 percentiles).
 - Histogram of $\Delta h = h_B(s) - h_A(s)$ on valid common states in $D$-dimensional space.
 - Scatter plot of $h_A \times h_B$ with diagonal reference line $y = x$.
 
 ### 5. Search Band (`Search Band`)
+
+![Search Band](assets/1fjlA_2all_vs_1fjlA_3all__band.png)
+
 Measures Euclidean distance from the main diagonal ($i = j = k = \dots$) in $D$-dimensional space:
 - Search band width profile by geometric progress (P25, median, P75, P90 for A and B).
 - Global deviation distributions in absolute count and normalized probability density.
 
 ### 6. Exploration Density (`Exploration Density`)
+
+![Exploration Density](assets/1fjlA_2all_vs_1fjlA_3all__density.png)
+
 Heatmaps of expansion frequency with dimension selectors ($X: S_i, Y: S_j$) and reference diagonal for any projection in $D$-dimensional space.
 
 ### 7. Expansion Dynamics (`Expansion Dynamics`)
+
+![Expansion Dynamics](assets/1fjlA_2all_vs_1fjlA_3all__dynamics.png)
+
 - Local minimum $h(n)$ of expanded nodes.
 - Local average $h(n)$ of expanded nodes.
 - Expansion displacement step distribution (Manhattan $L_1$).
 - Cumulative expansion displacements.
 
 ### 8. State Space Projections (`State Space Projections`)
+
+![State Space Projections](assets/1fjlA_2all_vs_1fjlA_3all__classic.png)
+
 Adaptive OpenGL-accelerated visualizer:
 - **$D = 3$**: Enables full 3D state space with badge indicating $(x, y, z)$ represents the complete state without loss.
 - **$D > 3$**: Displays explicit warning banner indicating partial 3D projection ($S_i \times S_j \times S_k$ only), noting that it should not be used as global search space evidence.

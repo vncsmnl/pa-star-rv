@@ -19,6 +19,9 @@ A ferramenta é projetada para processar eficientemente logs com milhões de nó
 A aplicação é estruturada em oito abas analíticas:
 
 ### 1. Resumo Executivo (`Summary`)
+
+![Resumo Executivo](assets/1fjlA_2all_vs_1fjlA_3all__summary.png)
+
 Dashboard completo com cartões de KPIs e tabelas estruturadas:
 - **Search Effort**: Total de expansões registradas, nós economizados ($N_A - N_B$) e redução percentual.
 - **Unique States & Deduplicação**: Estados únicos em A e B, interseção de estados comuns, estados exclusivos (Only A / Only B) e diagnósticos de consistência interna de $h$ e $g$.
@@ -27,6 +30,9 @@ Dashboard completo com cartões de KPIs e tabelas estruturadas:
 - **Footprint Occupancy**: Células ocupadas e sobreposição de Jaccard nas projeções $XY$, $XZ$ e $YZ$.
 
 ### 2. Economia de Busca (`Search Savings`)
+
+![Economia de Busca](assets/1fjlA_2all_vs_1fjlA_3all__savings.png)
+
 Análise da redução de esforço ao longo do **Progresso Geométrico de Alinhamento**:
 - *Cumulative Expanded Nodes by Geometric Progress* (A vs B).
 - *Cumulative Expansion Difference by Geometric Progress* ($cum_A - cum_B$).
@@ -34,32 +40,50 @@ Análise da redução de esforço ao longo do **Progresso Geométrico de Alinham
 - *Local Expansion Reduction (%)* e *Local Expansion Ratio (B / A)* com mascaramento para bins sem suporte estatístico mínimo.
 
 ### 3. Cobertura do Espaço de Estados (`Search Footprint`)
+
+![Cobertura do Espaço de Estados](assets/1fjlA_2all_vs_1fjlA_3all__footprint.png)
+
 Análise generalizada para todas as $\binom{D}{2}$ projeções pairwise com matriz de dispersão:
 - **Pairwise Projections Matrix**: Matriz triangular superior exibindo a diferença absoluta de expansão (*Absolute Expansion Difference*) para todas as relações de pares (e.g. 15 pares para $D=6$).
 - **Visualização Detalhada de Pares**: Seletor interativo com 4 mapas de calor em alta resolução (A, B, Diferença Absoluta com mapa RdBu simétrico centrado em zero e Densidade Relativa).
 - Tabela dinâmica de células ocupadas e sobreposição de Jaccard para todos os pares.
 
 ### 4. Comportamento Heurístico (`Heuristic Behaviour`)
+
+![Comportamento Heurístico](assets/1fjlA_2all_vs_1fjlA_3all__heuristic.png)
+
 Comparação detalhada das funções de avaliação ao longo do espaço geométrico $D$-dimensional:
 - Perfis de $h(n)$, $g(n)$ e $f(n)$ por progresso geométrico (medianas e percentis P25/P75).
 - Histograma de $\Delta h = h_B(s) - h_A(s)$ sobre estados comuns válidos calculados no espaço $D$-dimensional original.
 - Dispersão $h_A \times h_B$ com linha de referência diagonal $y = x$.
 
 ### 5. Banda de Busca (`Search Band`)
+
+![Banda de Busca](assets/1fjlA_2all_vs_1fjlA_3all__band.png)
+
 Mede o desvio euclidiano dos estados expandidos em relação à diagonal principal ($i = j = k = \dots$) no espaço $D$-dimensional:
 - Perfil de largura de banda por progresso geométrico (P25, mediana, P75, P90 para A e B).
 - Distribuições globais de desvio em contagem absoluta e densidade normalizada.
 
 ### 6. Densidade de Exploração (`Exploration Density`)
+
+![Densidade de Exploração](assets/1fjlA_2all_vs_1fjlA_3all__density.png)
+
 Mapas de calor de densidade de exploração com seletores de dimensões ($X: S_i, Y: S_j$) e linha diagonal de referência para qualquer projeção do espaço $D$-dimensional.
 
 ### 7. Dinâmica de Expansão (`Expansion Dynamics`)
+
+![Dinâmica de Expansão](assets/1fjlA_2all_vs_1fjlA_3all__dynamics.png)
+
 - Mínimo local de $h(n)$ de nós expandidos (*Local Minimum h(n)*).
 - Média local de $h(n)$ de nós expandidos (*Local Average h(n)*).
 - Distribuição de passos de deslocamento de expansão (*Expansion Displacement* em distância Manhattan).
 - Deslocamentos acumulados ao longo do índice de expansão.
 
 ### 8. Projeções no Espaço de Estados (`State Space Projections`)
+
+![Projeções no Espaço de Estados](assets/1fjlA_2all_vs_1fjlA_3all__classic.png)
+
 Visualizador adaptativo acelerado por OpenGL:
 - **$D = 3$**: Habilita 3D completo com badge indicativo de que $(x, y, z)$ representa o estado inteiro sem perda de informação.
 - **$D > 3$**: Exibe banner de aviso explícito indicando projeção 3D parcial ($S_i \times S_j \times S_k$ apenas), alertando que o gráfico não deve ser usado como evidência global do espaço de busca.
