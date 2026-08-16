@@ -153,7 +153,7 @@ uv run pastar-rv
 
 ### Testes Automatizados
 ```bash
-uv run python -m unittest discover -s tests -v
+uv run pytest
 ```
 
 ### Qualidade de Código (Lint & Format)

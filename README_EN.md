@@ -148,7 +148,7 @@ uv run pastar-rv
 
 ### Running Automated Tests
 ```bash
-uv run python -m unittest discover -s tests -v
+uv run pytest
 ```
 
 ### Code Quality (Lint & Format)
