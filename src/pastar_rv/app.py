@@ -76,7 +76,7 @@ TAB_DEFS = [
     ("band", "Search Band"),
     ("density", "Exploration Density"),
     ("dynamics", "Expansion Dynamics"),
-    ("classic", "3D + Projections"),
+    ("classic", "State Space Projections"),
 ]
 
 

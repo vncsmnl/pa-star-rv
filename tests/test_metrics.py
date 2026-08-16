@@ -8,12 +8,15 @@ import pytest
 from pastar_rv.metrics import (
     ComparisonCache,
     check_f_consistency,
+    compute_all_pairwise_footprints,
     compute_binned_percentiles,
     compute_common_states_analysis,
     compute_expansion_savings,
     compute_footprint_data,
     compute_geometric_alignment_progress,
     deduplicate_and_diagnose_states,
+    get_pair_label,
+    get_projection_pairs,
 )
 
 
@@ -225,3 +228,58 @@ def test_comparison_cache():
     cache.clear()
     assert len(cache) == 0
     assert cache.get("key1") is None
+
+
+def test_projection_pairs_and_labels():
+    pairs_3d = get_projection_pairs(3)
+    assert pairs_3d == [(0, 1), (0, 2), (1, 2)]
+
+    pairs_6d = get_projection_pairs(6)
+    assert len(pairs_6d) == 15
+    assert pairs_6d[0] == (0, 1)
+    assert pairs_6d[-1] == (4, 5)
+
+    assert get_pair_label(0, 1, prefix="Seq ") == "Seq 1 vs Seq 2"
+    assert get_pair_label(3, 5, prefix="S") == "S4 vs S6"
+
+
+def test_all_pairwise_footprints_6d():
+    n = 200
+    c6_a = np.random.randint(0, 100, size=(n, 6), dtype=np.int32)
+    c6_b = np.random.randint(0, 100, size=(n, 6), dtype=np.int32)
+
+    res = compute_all_pairwise_footprints(c6_a, c6_b, dimensions=6, n_bins=15)
+    assert res["dimensions"] == 6
+    assert len(res["pairs"]) == 15
+    assert len(res["footprints"]) == 15
+    assert 0.0 <= res["mean_jaccard"] <= 1.0
+
+    for pair in res["pairs"]:
+        fp = res["footprints"][pair]
+        assert "diff_abs" in fp
+        assert "diff_rel" in fp
+        assert "jaccard" in fp
+        assert fp["diff_abs"].shape == (15, 15)
+
+
+def test_d_dimensional_common_states_6d():
+    # 6D coordinates
+    c6_a = np.array([[1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 50, 60]], dtype=np.int32)
+    h_a = np.array([50, 100], dtype=np.int32)
+    g_a = np.array([10, 20], dtype=np.int32)
+    f_a = h_a + g_a
+
+    c6_b = np.array([[1, 2, 3, 4, 5, 6], [99, 99, 99, 99, 99, 99]], dtype=np.int32)
+    h_b = np.array([60, 200], dtype=np.int32)
+    g_b = np.array([10, 30], dtype=np.int32)
+    f_b = h_b + g_b
+
+    res = compute_common_states_analysis(c6_a, h_a, g_a, f_a, c6_b, h_b, g_b, f_b)
+    assert res["num_unique_a"] == 2
+    assert res["num_unique_b"] == 2
+    assert res["num_common_unique"] == 1
+    assert res["num_only_a"] == 1
+    assert res["num_only_b"] == 1
+    assert res["num_valid_h_common"] == 1
+    assert res["delta_h"][0] == 10.0  # 60 - 50 = +10
+

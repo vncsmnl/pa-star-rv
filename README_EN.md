@@ -34,25 +34,24 @@ Effort reduction profiles across **Geometric Alignment Progress**:
 - *Local Expansion Reduction (%)* and *Local Expansion Ratio (B / A)* with statistical support masking.
 
 ### 3. State Space Footprint (`Search Footprint`)
-Comparative heatmaps for orthogonal projections ($XY$, $XZ$, $YZ$):
-- Footprints of A and B with shared logarithmic scale.
-- *Absolute Expansion Difference* ($H_B - H_A$) with symmetric divergent colormap centered at zero.
-- *Relative Exploration Density Difference* ($H_{B,norm} - H_{A,norm}$).
-- Integrated table of occupied cells and Jaccard overlap.
+Generalized pairwise analysis across all $\binom{D}{2}$ projection pairs with matrix visualization:
+- **Pairwise Projections Matrix**: Upper-triangular matrix displaying the Absolute Expansion Difference for all projection pairs (e.g., 15 pairs for $D=6$).
+- **Detailed Pair View**: Interactive selector with 4 high-resolution heatmaps (A, B, Absolute Expansion Difference with zero-centered RdBu colormap, and Relative Density Difference).
+- Dynamic occupancy and Jaccard overlap table for all pairs.
 
 ### 4. Heuristic Behaviour (`Heuristic Behaviour`)
-Detailed evaluation function analysis across geometric space:
+Detailed evaluation function analysis across $D$-dimensional geometric space:
 - Profiles of $h(n)$, $g(n)$, and $f(n)$ across geometric progress (medians and P25/P75 percentiles).
-- Histogram of $\Delta h = h_B(s) - h_A(s)$ on valid common states.
+- Histogram of $\Delta h = h_B(s) - h_A(s)$ on valid common states in $D$-dimensional space.
 - Scatter plot of $h_A \times h_B$ with diagonal reference line $y = x$.
 
 ### 5. Search Band (`Search Band`)
-Measures Euclidean distance from the main diagonal ($i = j = k = \dots$):
+Measures Euclidean distance from the main diagonal ($i = j = k = \dots$) in $D$-dimensional space:
 - Search band width profile by geometric progress (P25, median, P75, P90 for A and B).
 - Global deviation distributions in absolute count and normalized probability density.
 
 ### 6. Exploration Density (`Exploration Density`)
-Heatmaps of expansion frequency on the discrete 2D grid with reference diagonal.
+Heatmaps of expansion frequency with dimension selectors ($X: S_i, Y: S_j$) and reference diagonal for any projection in $D$-dimensional space.
 
 ### 7. Expansion Dynamics (`Expansion Dynamics`)
 - Local minimum $h(n)$ of expanded nodes.
@@ -60,8 +59,11 @@ Heatmaps of expansion frequency on the discrete 2D grid with reference diagonal.
 - Expansion displacement step distribution (Manhattan $L_1$).
 - Cumulative expansion displacements.
 
-### 8. 3D Trajectory & Projections (`3D + Projections`)
-Interactive OpenGL-accelerated 3D trajectory visualization with temporal color gradient and synchronized orthogonal 2D projections.
+### 8. State Space Projections (`State Space Projections`)
+Adaptive OpenGL-accelerated visualizer:
+- **$D = 3$**: Enables full 3D state space with badge indicating $(x, y, z)$ represents the complete state without loss.
+- **$D > 3$**: Displays explicit warning banner indicating partial 3D projection ($S_i \times S_j \times S_k$ only), noting that it should not be used as global search space evidence.
+- **Dimension Selectors**: Dynamic dropdowns for 3D axes and 2D projection ($X: S_i, Y: S_j$), enabling inspection of any of the $\binom{D}{2}$ pairwise projections with iteration time gradients and diagonal lines.
 
 ---
 

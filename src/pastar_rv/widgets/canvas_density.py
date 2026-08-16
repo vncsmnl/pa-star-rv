@@ -1,98 +1,212 @@
 """
-Exploration Density Heatmaps Widget using PyQtGraph
+Exploration Density Heatmaps Widget (CanvasDensity)
+Visualizes 2D exploration density heatmaps for any arbitrary (Xi, Xj) projection in D-dimensional space.
 """
 
 import numpy as np
 
 try:
     import pyqtgraph as pg
-    from PyQt6.QtWidgets import QHBoxLayout, QWidget
+    from PyQt6.QtGui import QFont
+    from PyQt6.QtWidgets import (
+        QComboBox,
+        QFrame,
+        QHBoxLayout,
+        QLabel,
+        QVBoxLayout,
+        QWidget,
+    )
 except ImportError:
     import pyqtgraph as pg
-    from PyQt5.QtWidgets import QHBoxLayout, QWidget
+    from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QComboBox,
+        QFrame,
+        QHBoxLayout,
+        QLabel,
+        QVBoxLayout,
+        QWidget,
+    )
 
 
 class CanvasDensity(QWidget):
-    """Fast 2D Exploration Density Heatmap Canvas."""
+    """
+    Adaptive Exploration Density Heatmap Canvas.
+    Supports selecting any pairwise projection (x_i, x_j) across all D dimensions.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._current_key = None
-        self._cache = {}
+        self._data = None
+        self._label = ""
+        self._dimensions = 3
+        self._lut = None
+
+        self._init_colormap()
         self._build_ui()
 
+    def _init_colormap(self):
+        pos = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+        color = np.array(
+            [
+                [13, 8, 135, 255],
+                [126, 3, 168, 255],
+                [204, 71, 120, 255],
+                [248, 149, 64, 255],
+                [240, 249, 33, 255],
+            ],
+            dtype=np.ubyte,
+        )
+        cmap = pg.ColorMap(pos, color)
+        self._lut = cmap.getLookupTable(0.0, 1.0, 256)
+
     def _build_ui(self):
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
 
-        self.plot_xy = pg.PlotWidget(title="XY Exploration Density (Top)")
-        self.plot_xz = pg.PlotWidget(title="XZ Exploration Density (Front)")
-        self.plot_yz = pg.PlotWidget(title="YZ Exploration Density (Side)")
+        # ── Control Bar ──
+        ctrl_bar = QFrame()
+        ctrl_bar.setStyleSheet(
+            "QFrame { background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 6px; }"
+        )
+        ctrl_layout = QHBoxLayout(ctrl_bar)
+        ctrl_layout.setContentsMargins(10, 6, 10, 6)
+        ctrl_layout.setSpacing(10)
 
-        for p in (self.plot_xy, self.plot_xz, self.plot_yz):
+        lbl_ctrl = QLabel("Projection Density:")
+        lbl_ctrl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        lbl_ctrl.setStyleSheet("color: #1e293b;")
+        ctrl_layout.addWidget(lbl_ctrl)
+
+        ctrl_layout.addWidget(QLabel("X:"))
+        self.combo_x = QComboBox()
+        self.combo_x.setFont(QFont("Segoe UI", 9))
+        self.combo_x.currentIndexChanged.connect(self._on_dims_changed)
+        ctrl_layout.addWidget(self.combo_x)
+
+        ctrl_layout.addWidget(QLabel("Y:"))
+        self.combo_y = QComboBox()
+        self.combo_y.setFont(QFont("Segoe UI", 9))
+        self.combo_y.currentIndexChanged.connect(self._on_dims_changed)
+        ctrl_layout.addWidget(self.combo_y)
+
+        self.lbl_info = QLabel("—")
+        self.lbl_info.setFont(QFont("Segoe UI", 8))
+        self.lbl_info.setStyleSheet("color: #64748b; font-style: italic;")
+        ctrl_layout.addWidget(self.lbl_info)
+
+        ctrl_layout.addStretch()
+        layout.addWidget(ctrl_bar)
+
+        # ── Plots Grid (1 Main Selected + 2 Secondary) ──
+        plots_layout = QHBoxLayout()
+        plots_layout.setSpacing(6)
+
+        self.plot_main = pg.PlotWidget(title="Selected Projection Exploration Density")
+        self.plot_sub1 = pg.PlotWidget(title="Seq 1 vs Seq 2 Density")
+        self.plot_sub2 = pg.PlotWidget(title="Seq 1 vs Seq 3 Density")
+
+        for p in (self.plot_main, self.plot_sub1, self.plot_sub2):
             p.setBackground("w")
             p.showGrid(x=True, y=True, alpha=0.3)
             p.getAxis("left").setPen("k")
             p.getAxis("bottom").setPen("k")
-            layout.addWidget(p)
+
+        plots_layout.addWidget(self.plot_main, stretch=3)
+        plots_layout.addWidget(self.plot_sub1, stretch=2)
+        plots_layout.addWidget(self.plot_sub2, stretch=2)
+
+        layout.addLayout(plots_layout)
+
+    def _populate_combos(self, d_dims):
+        self.combo_x.blockSignals(True)
+        self.combo_y.blockSignals(True)
+
+        self.combo_x.clear()
+        self.combo_y.clear()
+
+        for d in range(d_dims):
+            self.combo_x.addItem(f"Seq {d + 1}", d)
+            self.combo_y.addItem(f"Seq {d + 1}", d)
+
+        self.combo_x.setCurrentIndex(0)
+        self.combo_y.setCurrentIndex(min(1, d_dims - 1))
+
+        self.combo_x.blockSignals(False)
+        self.combo_y.blockSignals(False)
 
     def set_data(self, data, label=""):
+        if data is None:
+            return
+
+        self._data = data
+        self._label = label
         data_key = id(data)
-        if self._current_key == data_key:
-            return
-        self._current_key = data_key
 
-        coords = data["coords"]
-        if len(coords) == 0:
+        coords = data.get("coords")
+        if coords is None or len(coords) == 0:
             return
 
-        if data_key in self._cache:
-            plots_data, lut = self._cache[data_key]
-        else:
-            x = coords[:, 0]
-            y = coords[:, 1]
-            z = coords[:, 2] if coords.shape[1] > 2 else np.zeros_like(x)
+        d_dims = coords.shape[1] if coords.ndim > 1 else 1
+        self._dimensions = d_dims
 
-            pos = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
-            color = np.array(
-                [
-                    [13, 8, 135, 255],
-                    [126, 3, 168, 255],
-                    [204, 71, 120, 255],
-                    [248, 149, 64, 255],
-                    [240, 249, 33, 255],
-                ],
-                dtype=np.ubyte,
-            )
-            cmap = pg.ColorMap(pos, color)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
+        if self._current_key != data_key:
+            self._current_key = data_key
+            self._populate_combos(d_dims)
 
-            BINS = 100
-            plots_data = []
-            for px, py in [(x, y), (x, z), (y, z)]:
-                H, xe, ye = np.histogram2d(px, py, bins=BINS)
-                H_log = np.log1p(H)
-                max_val = max(1.0, H_log.max())
-                H_norm = H_log / max_val
-                rect_x = xe[-1] - xe[0]
-                rect_y = ye[-1] - ye[0]
-                lim = max(xe[-1], ye[-1])
-                plots_data.append((H_norm, xe[0], ye[0], rect_x, rect_y, lim))
-            self._cache[data_key] = (plots_data, lut)
+        self.lbl_info.setText(
+            f"Dataset: {label} ({len(coords):,} expanded nodes · {d_dims} Dimensions)"
+        )
+        self._render_plots()
 
-        for plt_widget, (H_norm, x0, y0, rect_x, rect_y, lim), xl, yl in [
-            (self.plot_xy, plots_data[0], "Seq A (i)", "Seq B (j)"),
-            (self.plot_xz, plots_data[1], "Seq A (i)", "Seq C (k)"),
-            (self.plot_yz, plots_data[2], "Seq B (j)", "Seq C (k)"),
-        ]:
+    def _on_dims_changed(self):
+        if self._data is not None:
+            self._render_plots()
+
+    def _render_plots(self):
+        if self._data is None:
+            return
+
+        coords = self._data["coords"]
+        n_points = len(coords)
+        if n_points == 0:
+            return
+
+        d_dims = coords.shape[1]
+        dx = self.combo_x.currentData()
+        if dx is None:
+            dx = 0
+        dy = self.combo_y.currentData()
+        if dy is None:
+            dy = 1 if d_dims > 1 else 0
+
+        BINS = 100
+
+        # Helper to compute and render heatmap
+        def _plot_density(plt_widget, d0, d1, title_text):
+            x = coords[:, d0] if coords.shape[1] > d0 else np.zeros(n_points)
+            y = coords[:, d1] if coords.shape[1] > d1 else np.zeros(n_points)
+
+            H, xe, ye = np.histogram2d(x, y, bins=BINS)
+            H_log = np.log1p(H)
+            max_val = max(1.0, H_log.max())
+            H_norm = H_log / max_val
+
+            rect_x = xe[-1] - xe[0]
+            rect_y = ye[-1] - ye[0]
+            lim = max(xe[-1], ye[-1], 1.0)
+
             plt_widget.clear()
-            plt_widget.setLabel("bottom", xl)
-            plt_widget.setLabel("left", yl)
+            plt_widget.setTitle(title_text)
+            plt_widget.setLabel("bottom", f"Seq {d0 + 1}")
+            plt_widget.setLabel("left", f"Seq {d1 + 1}")
 
             img = pg.ImageItem()
             img.setImage(H_norm)
-            img.setLookupTable(lut)
-            img.setRect(pg.QtCore.QRectF(x0, y0, rect_x, rect_y))
+            img.setLookupTable(self._lut)
+            img.setRect(pg.QtCore.QRectF(xe[0], ye[0], rect_x, rect_y))
             plt_widget.addItem(img)
 
             diag = pg.PlotCurveItem(
@@ -101,3 +215,28 @@ class CanvasDensity(QWidget):
                 pen=pg.mkPen(color=(214, 39, 40), width=1.5, style=pg.QtCore.Qt.PenStyle.DashLine),
             )
             plt_widget.addItem(diag)
+
+        # 1. Main Selected Density Plot
+        _plot_density(
+            self.plot_main,
+            dx,
+            dy,
+            f"Selected Density: Seq {dx + 1} vs Seq {dy + 1} ({self._label})",
+        )
+
+        # 2. Subplots (Presets or Secondary Projections)
+        pair1 = (0, 1)
+        pair2 = (0, 2) if d_dims > 2 else (1, min(1, d_dims - 1))
+
+        _plot_density(
+            self.plot_sub1,
+            pair1[0],
+            pair1[1],
+            f"Seq {pair1[0] + 1} vs Seq {pair1[1] + 1} Density",
+        )
+        _plot_density(
+            self.plot_sub2,
+            pair2[0],
+            pair2[1],
+            f"Seq {pair2[0] + 1} vs Seq {pair2[1] + 1} Density",
+        )

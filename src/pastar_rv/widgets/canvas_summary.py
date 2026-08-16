@@ -42,11 +42,12 @@ from pastar_rv.metrics import (
     FOOTPRINT_BINS,
     MIN_BIN_SUPPORT,
     PROGRESS_BINS,
+    compute_all_pairwise_footprints,
     compute_band_comparison,
     compute_common_states_analysis,
     compute_expansion_savings,
-    compute_footprint_data,
     compute_geometric_alignment_progress,
+    get_pair_label,
 )
 
 
@@ -246,9 +247,8 @@ class CanvasSummary(QWidget):
                 db["g"],
                 db["f"],
             )
-            fp_xy = compute_footprint_data(cA, cB, proj_dims=(0, 1), n_bins=FOOTPRINT_BINS)
-            fp_xz = compute_footprint_data(cA, cB, proj_dims=(0, 2), n_bins=FOOTPRINT_BINS)
-            fp_yz = compute_footprint_data(cA, cB, proj_dims=(1, 2), n_bins=FOOTPRINT_BINS)
+            d_dims = max(cA.shape[1] if cA.ndim > 1 else 0, cB.shape[1] if cB.ndim > 1 else 0, 2)
+            all_fp = compute_all_pairwise_footprints(cA, cB, dimensions=d_dims, n_bins=FOOTPRINT_BINS)
             band_res = compute_band_comparison(
                 prog_a, da["dev"], prog_b, db["dev"], n_bins=PROGRESS_BINS
             )
@@ -256,11 +256,11 @@ class CanvasSummary(QWidget):
             self._cache[cache_key] = (
                 savings,
                 common_res,
-                fp_xy,
-                fp_xz,
-                fp_yz,
+                all_fp,
                 band_res,
             )
+
+        savings, common_res, all_fp, band_res = self._cache[cache_key]
 
         nA = savings["expansions_a"]
         nB = savings["expansions_b"]
@@ -424,35 +424,21 @@ class CanvasSummary(QWidget):
         ]
         self._populate_table(self.table_diag, diag_rows)
 
-        fp_rows = [
-            (
-                "XY (Top: Seq A vs Seq B)",
-                f"{fp_xy['n_occupied_a']:,}",
-                f"{fp_xy['n_occupied_b']:,}",
-                f"{fp_xy['n_shared']:,}",
-                f"{fp_xy['n_only_a']:,}",
-                f"{fp_xy['n_only_b']:,}",
-                f"{fp_xy['jaccard']:.4f}",
-            ),
-            (
-                "XZ (Front: Seq A vs Seq C)",
-                f"{fp_xz['n_occupied_a']:,}",
-                f"{fp_xz['n_occupied_b']:,}",
-                f"{fp_xz['n_shared']:,}",
-                f"{fp_xz['n_only_a']:,}",
-                f"{fp_xz['n_only_b']:,}",
-                f"{fp_xz['jaccard']:.4f}",
-            ),
-            (
-                "YZ (Side: Seq B vs Seq C)",
-                f"{fp_yz['n_occupied_a']:,}",
-                f"{fp_yz['n_occupied_b']:,}",
-                f"{fp_yz['n_shared']:,}",
-                f"{fp_yz['n_only_a']:,}",
-                f"{fp_yz['n_only_b']:,}",
-                f"{fp_yz['jaccard']:.4f}",
-            ),
-        ]
+        fp_rows = []
+        for d0, d1 in all_fp["pairs"]:
+            fp = all_fp["footprints"][(d0, d1)]
+            pair_name = get_pair_label(d0, d1, prefix="Seq ")
+            fp_rows.append(
+                (
+                    pair_name,
+                    f"{fp['n_occupied_a']:,}",
+                    f"{fp['n_occupied_b']:,}",
+                    f"{fp['n_shared']:,}",
+                    f"{fp['n_only_a']:,}",
+                    f"{fp['n_only_b']:,}",
+                    f"{fp['jaccard']:.4f}",
+                )
+            )
         self._populate_table(self.table_fp, fp_rows)
 
     def _populate_table(self, table_widget, rows):

@@ -34,25 +34,24 @@ Análise da redução de esforço ao longo do **Progresso Geométrico de Alinham
 - *Local Expansion Reduction (%)* e *Local Expansion Ratio (B / A)* com mascaramento para bins sem suporte estatístico mínimo.
 
 ### 3. Cobertura do Espaço de Estados (`Search Footprint`)
-Mapas de calor comparativos para as projeções ortogonais $XY$, $XZ$ e $YZ$:
-- Pegada de A e B (escala logarítmica compartilhada).
-- *Absolute Expansion Difference* ($H_B - H_A$) com mapa de cores divergente simétrico centrado em zero.
-- *Relative Exploration Density Difference* ($H_{B,norm} - H_{A,norm}$).
-- Tabela integrada de células ocupadas e coeficiente de Jaccard.
+Análise generalizada para todas as $\binom{D}{2}$ projeções pairwise com matriz de dispersão:
+- **Pairwise Projections Matrix**: Matriz triangular superior exibindo a diferença absoluta de expansão (*Absolute Expansion Difference*) para todas as relações de pares (e.g. 15 pares para $D=6$).
+- **Visualização Detalhada de Pares**: Seletor interativo com 4 mapas de calor em alta resolução (A, B, Diferença Absoluta com mapa RdBu simétrico centrado em zero e Densidade Relativa).
+- Tabela dinâmica de células ocupadas e sobreposição de Jaccard para todos os pares.
 
 ### 4. Comportamento Heurístico (`Heuristic Behaviour`)
-Comparação detalhada das funções de avaliação ao longo do espaço geométrico:
+Comparação detalhada das funções de avaliação ao longo do espaço geométrico $D$-dimensional:
 - Perfis de $h(n)$, $g(n)$ e $f(n)$ por progresso geométrico (medianas e percentis P25/P75).
-- Histograma de $\Delta h = h_B(s) - h_A(s)$ sobre estados comuns válidos.
+- Histograma de $\Delta h = h_B(s) - h_A(s)$ sobre estados comuns válidos calculados no espaço $D$-dimensional original.
 - Dispersão $h_A \times h_B$ com linha de referência diagonal $y = x$.
 
 ### 5. Banda de Busca (`Search Band`)
-Mede o desvio euclidiano dos estados expandidos em relação à diagonal principal (linha $i = j = k = \dots$):
+Mede o desvio euclidiano dos estados expandidos em relação à diagonal principal ($i = j = k = \dots$) no espaço $D$-dimensional:
 - Perfil de largura de banda por progresso geométrico (P25, mediana, P75, P90 para A e B).
 - Distribuições globais de desvio em contagem absoluta e densidade normalizada.
 
 ### 6. Densidade de Exploração (`Exploration Density`)
-Mapas de calor individuais de frequência de expansão de nós na grade discreta com linha diagonal de referência.
+Mapas de calor de densidade de exploração com seletores de dimensões ($X: S_i, Y: S_j$) e linha diagonal de referência para qualquer projeção do espaço $D$-dimensional.
 
 ### 7. Dinâmica de Expansão (`Expansion Dynamics`)
 - Mínimo local de $h(n)$ de nós expandidos (*Local Minimum h(n)*).
@@ -60,8 +59,11 @@ Mapas de calor individuais de frequência de expansão de nós na grade discreta
 - Distribuição de passos de deslocamento de expansão (*Expansion Displacement* em distância Manhattan).
 - Deslocamentos acumulados ao longo do índice de expansão.
 
-### 8. Trajetória 3D e Projeções (`3D + Projections`)
-Visualização 3D interativa acelerada por OpenGL com gradiente de cor temporal e projeções 2D ortogonais sincronizadas.
+### 8. Projeções no Espaço de Estados (`State Space Projections`)
+Visualizador adaptativo acelerado por OpenGL:
+- **$D = 3$**: Habilita 3D completo com badge indicativo de que $(x, y, z)$ representa o estado inteiro sem perda de informação.
+- **$D > 3$**: Exibe banner de aviso explícito indicando projeção 3D parcial ($S_i \times S_j \times S_k$ apenas), alertando que o gráfico não deve ser usado como evidência global do espaço de busca.
+- **Seletores de Dimensões**: Seletores dinâmicos para eixos 3D e eixos 2D ($X: S_i, Y: S_j$), permitindo inspecionar qualquer uma das $\binom{D}{2}$ projeções bidimensionais com gradiente de tempo de iteração e linha diagonal.
 
 ---
 

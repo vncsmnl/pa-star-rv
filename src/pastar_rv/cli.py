@@ -22,12 +22,13 @@ from pastar_rv.metrics import (
     FOOTPRINT_BINS,
     MIN_BIN_SUPPORT,
     PROGRESS_BINS,
+    compute_all_pairwise_footprints,
     compute_band_comparison,
     compute_common_states_analysis,
     compute_expansion_savings,
-    compute_footprint_data,
     compute_geometric_alignment_progress,
     deduplicate_and_diagnose_states,
+    get_pair_label,
     intersect_unique_states_packed,
     intersect_unique_states_structured,
 )
@@ -198,24 +199,22 @@ def main():
     t_common = time.perf_counter() - t4
     print(f"  Computed common state analysis in {t_common:.4f}s")
 
-    # 5. Footprint & Band Deviation
-    print("\n[5/5] Computing 2D Footprint (XY, XZ, YZ) and Search Band metrics...")
+    # 5. Pairwise Projections & Search Footprint
+    print("\n[5/5] Computing pairwise 2D Footprint projections and Search Band metrics...")
     t5 = time.perf_counter()
-    fp_xy = compute_footprint_data(
-        data_a["coords"], data_b["coords"], proj_dims=(0, 1), n_bins=FOOTPRINT_BINS
-    )
-    fp_xz = compute_footprint_data(
-        data_a["coords"], data_b["coords"], proj_dims=(0, 2), n_bins=FOOTPRINT_BINS
-    )
-    fp_yz = compute_footprint_data(
-        data_a["coords"], data_b["coords"], proj_dims=(1, 2), n_bins=FOOTPRINT_BINS
+    d_dims = max(data_a.get("dimensions", 3), data_b.get("dimensions", 3))
+    all_fp = compute_all_pairwise_footprints(
+        data_a["coords"], data_b["coords"], dimensions=d_dims, n_bins=FOOTPRINT_BINS
     )
 
     band_res = compute_band_comparison(
         prog_a, data_a["dev"], prog_b, data_b["dev"], n_bins=PROGRESS_BINS
     )
     t_fp_band = time.perf_counter() - t5
-    print(f"  Computed footprint & band in {t_fp_band:.4f}s")
+    print(
+        f"  Computed {len(all_fp['pairs'])} pairwise projections & band deviation in {t_fp_band:.4f}s "
+        f"(Mean Jaccard: {all_fp['mean_jaccard']:.4f})"
+    )
 
     rss_final, peak_final = get_process_memory_info()
 
@@ -277,15 +276,18 @@ def main():
         f"{common_res['f_diag_b']['total_entries']:,} ({common_res['f_diag_b']['match_pct']:.2f} %)"
     )
 
-    # 5. Footprint Occupancy
-    print("\n[SEARCH FOOTPRINT OCCUPANCY (2D PROJECTIONS)]")
-    print("  Projection | Occupied A | Occupied B | Shared Cells | Only A | Only B | Jaccard")
-    print("  -----------+------------+------------+--------------+--------+--------+--------")
-    for name, fp in [("XY (Top)  ", fp_xy), ("XZ (Front)", fp_xz), ("YZ (Side) ", fp_yz)]:
+    # 5. Pairwise Projections & Footprint Occupancy
+    print(f"\n[SEARCH FOOTPRINT OCCUPANCY ({len(all_fp['pairs'])} PAIRWISE PROJECTIONS)]")
+    print("  Projection Pair | Occupied A | Occupied B | Shared Cells | Only A | Only B | Jaccard")
+    print("  ----------------+------------+------------+--------------+--------+--------+--------")
+    for d0, d1 in all_fp["pairs"]:
+        fp = all_fp["footprints"][(d0, d1)]
+        pair_str = f"{get_pair_label(d0, d1, prefix='Seq '):15s}"
         print(
-            f"  {name} | {fp['n_occupied_a']:10,d} | {fp['n_occupied_b']:10,d} | "
+            f"  {pair_str} | {fp['n_occupied_a']:10,d} | {fp['n_occupied_b']:10,d} | "
             f"{fp['n_shared']:12,d} | {fp['n_only_a']:6,d} | {fp['n_only_b']:6,d} | {fp['jaccard']:.4f}"
         )
+    print(f"  --> Mean Pairwise Jaccard Overlap: {all_fp['mean_jaccard']:.4f}")
 
     # 6. Search Band Deviation
     print("\n[SEARCH BAND DEVIATION]")

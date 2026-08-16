@@ -365,6 +365,71 @@ def compute_footprint_data(coords_a, coords_b, proj_dims=(0, 1), n_bins=FOOTPRIN
     }
 
 
+def get_projection_pairs(d_dims):
+    """
+    Returns list of all 2D projection dimension index pairs (d0, d1) for 0 <= d0 < d1 < d_dims.
+    For D=3: [(0, 1), (0, 2), (1, 2)]
+    For D=6: 15 pairs [(0, 1), (0, 2), ..., (4, 5)]
+    """
+    if d_dims < 2:
+        return []
+    return [(i, j) for i in range(d_dims) for j in range(i + 1, d_dims)]
+
+
+def get_pair_label(d0, d1, prefix="Seq "):
+    """
+    Returns human-friendly label for a dimension pair, e.g. 'Seq 1 vs Seq 2' or 'S1 vs S2'.
+    """
+    return f"{prefix}{d0 + 1} vs {prefix}{d1 + 1}"
+
+
+def compute_all_pairwise_footprints(coords_a, coords_b, dimensions=None, n_bins=FOOTPRINT_BINS):
+    """
+    Computes 2D footprint occupancy, absolute expansion difference, and relative
+    exploration density for ALL (D choose 2) dimension pairs.
+
+    Parameters:
+        coords_a: (N_A, D) int32 array
+        coords_b: (N_B, D) int32 array
+        dimensions: int or None (inferred from coords shape if None, minimum 2)
+        n_bins: int
+
+    Returns:
+        dict with:
+            - 'dimensions': int
+            - 'pairs': list of (d0, d1)
+            - 'footprints': dict mapping (d0, d1) -> footprint dict from compute_footprint_data
+            - 'mean_jaccard': float
+    """
+    cA = np.asarray(coords_a, dtype=np.int32) if coords_a is not None else np.empty((0, 2), dtype=np.int32)
+    cB = np.asarray(coords_b, dtype=np.int32) if coords_b is not None else np.empty((0, 2), dtype=np.int32)
+
+    if dimensions is None:
+        dim_a = cA.shape[1] if cA.ndim > 1 and cA.shape[0] > 0 else 0
+        dim_b = cB.shape[1] if cB.ndim > 1 and cB.shape[0] > 0 else 0
+        d_dims = max(dim_a, dim_b, 2)
+    else:
+        d_dims = max(int(dimensions), 2)
+
+    pairs = get_projection_pairs(d_dims)
+    footprints = {}
+    jaccards = []
+
+    for d0, d1 in pairs:
+        fp = compute_footprint_data(cA, cB, proj_dims=(d0, d1), n_bins=n_bins)
+        footprints[(d0, d1)] = fp
+        jaccards.append(fp["jaccard"])
+
+    mean_jaccard = float(np.mean(jaccards)) if jaccards else 0.0
+
+    return {
+        "dimensions": d_dims,
+        "pairs": pairs,
+        "footprints": footprints,
+        "mean_jaccard": mean_jaccard,
+    }
+
+
 # ─────────────────────────────────────────────
 #  PRE-DEDUPLICATION CONSISTENCY CHECK
 # ─────────────────────────────────────────────
@@ -431,8 +496,9 @@ def deduplicate_and_diagnose_states(coords, h, g):
             - 'inconsistent_g_count': int
     """
     if coords is None or len(coords) == 0:
+        d = coords.shape[1] if (coords is not None and hasattr(coords, "shape") and coords.ndim > 1) else 0
         return {
-            "unique_coords": np.empty((0, 3), dtype=np.int32),
+            "unique_coords": np.empty((0, d), dtype=np.int32),
             "unique_h": np.empty(0, dtype=np.int32),
             "unique_g": np.empty(0, dtype=np.int32),
             "h_is_consistent": np.empty(0, dtype=bool),
