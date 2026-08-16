@@ -1,0 +1,60 @@
+[project]
+name = "pastar-rv"
+version = "0.2.0"
+description = "High-Performance Runtime Visualizer and Analytics for PA-Star Multiple Sequence Alignment"
+readme = "README.md"
+authors = [
+    { name = "Vinicius", email = "vinicius@example.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.5.0",
+    "pyqtgraph>=0.13.0",
+    "PyOpenGL>=3.1.0",
+    "numpy>=1.24.0",
+]
+
+[project.scripts]
+pastar-rv = "pastar_rv.app:main"
+pastar-validate = "pastar_rv.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pastar_rv"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
