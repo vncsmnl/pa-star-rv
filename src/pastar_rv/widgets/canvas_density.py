@@ -29,6 +29,9 @@ except ImportError:
     )
 
 
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
+
+
 class CanvasDensity(QWidget):
     """
     Adaptive Exploration Density Heatmap Canvas.
@@ -79,16 +82,19 @@ class CanvasDensity(QWidget):
         lbl_ctrl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         lbl_ctrl.setStyleSheet("color: #1e293b;")
         ctrl_layout.addWidget(lbl_ctrl)
+        ctrl_layout.addWidget(create_info_badge("density_controls"))
 
         ctrl_layout.addWidget(QLabel("X:"))
         self.combo_x = QComboBox()
         self.combo_x.setFont(QFont("Segoe UI", 9))
+        self.combo_x.setToolTip(TOOLTIPS["density_controls"])
         self.combo_x.currentIndexChanged.connect(self._on_dims_changed)
         ctrl_layout.addWidget(self.combo_x)
 
         ctrl_layout.addWidget(QLabel("Y:"))
         self.combo_y = QComboBox()
         self.combo_y.setFont(QFont("Segoe UI", 9))
+        self.combo_y.setToolTip(TOOLTIPS["density_controls"])
         self.combo_y.currentIndexChanged.connect(self._on_dims_changed)
         ctrl_layout.addWidget(self.combo_y)
 
@@ -108,15 +114,42 @@ class CanvasDensity(QWidget):
         self.plot_sub1 = pg.PlotWidget(title="Seq 1 vs Seq 2 Density")
         self.plot_sub2 = pg.PlotWidget(title="Seq 1 vs Seq 3 Density")
 
+        self.plot_main.setToolTip(TOOLTIPS["plot_density_main"])
+        self.plot_sub1.setToolTip(TOOLTIPS["plot_density_main"])
+        self.plot_sub2.setToolTip(TOOLTIPS["plot_density_main"])
+
         for p in (self.plot_main, self.plot_sub1, self.plot_sub2):
             p.setBackground("w")
             p.showGrid(x=True, y=True, alpha=0.3)
             p.getAxis("left").setPen("k")
             p.getAxis("bottom").setPen("k")
 
-        plots_layout.addWidget(self.plot_main, stretch=3)
-        plots_layout.addWidget(self.plot_sub1, stretch=2)
-        plots_layout.addWidget(self.plot_sub2, stretch=2)
+        def wrap_dense(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_main = wrap_dense(self.plot_main, "Selected Projection Density", "plot_density_main")
+        w_sub1 = wrap_dense(self.plot_sub1, "Seq 1 vs Seq 2 Density", "plot_density_main")
+        w_sub2 = wrap_dense(self.plot_sub2, "Seq 1 vs Seq 3 Density", "plot_density_main")
+
+        plots_layout.addWidget(w_main, stretch=3)
+        plots_layout.addWidget(w_sub1, stretch=2)
+        plots_layout.addWidget(w_sub2, stretch=2)
 
         layout.addLayout(plots_layout)
 

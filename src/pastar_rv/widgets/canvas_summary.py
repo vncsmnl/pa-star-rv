@@ -49,6 +49,7 @@ from pastar_rv.metrics import (
     compute_geometric_alignment_progress,
     get_pair_label,
 )
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasSummary(QWidget):
@@ -88,38 +89,45 @@ class CanvasSummary(QWidget):
         kpi_layout.setContentsMargins(16, 12, 16, 12)
         kpi_layout.setSpacing(24)
 
-        def make_kpi(title, subtitle="—", color="#1e293b"):
+        def make_kpi(title, subtitle="—", color="#1e293b", tooltip_key=None):
             col = QVBoxLayout()
             col.setSpacing(2)
+            t_row = QHBoxLayout()
+            t_row.setSpacing(4)
             lbl_t = QLabel(title)
             lbl_t.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             lbl_t.setStyleSheet("color: #64748b; text-transform: uppercase;")
+            t_row.addWidget(lbl_t)
+            if tooltip_key:
+                t_row.addWidget(create_info_badge(tooltip_key))
+            t_row.addStretch()
+
             lbl_v = QLabel("—")
             lbl_v.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
             lbl_v.setStyleSheet(f"color: {color};")
             lbl_sub = QLabel(subtitle)
             lbl_sub.setFont(QFont("Segoe UI", 8))
             lbl_sub.setStyleSheet("color: #94a3b8;")
-            col.addWidget(lbl_t)
+            col.addLayout(t_row)
             col.addWidget(lbl_v)
             col.addWidget(lbl_sub)
             kpi_layout.addLayout(col)
             return lbl_v, lbl_sub
 
         self.kpi_nodes_a, self.kpi_sub_a = make_kpi(
-            "Baseline (A) Expansions", "Total log records", "#1f77b4"
+            "Baseline (A) Expansions", "Total log records", "#1f77b4", "kpi_expansions_a"
         )
         self.kpi_nodes_b, self.kpi_sub_b = make_kpi(
-            "Candidate (B) Expansions", "Total log records", "#d62728"
+            "Candidate (B) Expansions", "Total log records", "#d62728", "kpi_expansions_b"
         )
         self.kpi_saved, self.kpi_sub_saved = make_kpi(
-            "Total Expansions Saved", "N_A − N_B", "#2563eb"
+            "Total Expansions Saved", "N_A − N_B", "#2563eb", "kpi_nodes_saved"
         )
         self.kpi_red, self.kpi_sub_red = make_kpi(
-            "Expansion Reduction", "% saved by Candidate", "#16a34a"
+            "Expansion Reduction", "% saved by Candidate", "#16a34a", "kpi_reduction_pct"
         )
         self.kpi_common, self.kpi_sub_common = make_kpi(
-            "Common Unique States", "Geometric intersection", "#7c3aed"
+            "Common Unique States", "Geometric intersection", "#7c3aed", "kpi_common_states"
         )
         kpi_layout.addStretch()
 
@@ -129,7 +137,7 @@ class CanvasSummary(QWidget):
         grid = QGridLayout()
         grid.setSpacing(12)
 
-        def make_group(title):
+        def make_group(title, tooltip_key=None):
             gb = QGroupBox(title)
             gb.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             gb.setStyleSheet(
@@ -137,11 +145,32 @@ class CanvasSummary(QWidget):
                 "margin-top: 8px; padding-top: 10px; background: white; } "
                 "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #1e293b; }"
             )
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                gb.setToolTip(TOOLTIPS[tooltip_key])
             return gb
 
+        def make_group_header(gb, title, tooltip_key):
+            layout = QVBoxLayout(gb)
+            layout.setContentsMargins(8, 8, 8, 8)
+            layout.setSpacing(6)
+            if tooltip_key:
+                h_row = QHBoxLayout()
+                h_row.setContentsMargins(2, 0, 2, 0)
+                h_row.setSpacing(4)
+                lbl_desc = QLabel(title)
+                lbl_desc.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                lbl_desc.setStyleSheet("color: #1e293b;")
+                h_row.addWidget(lbl_desc)
+                h_row.addWidget(create_info_badge(tooltip_key))
+                h_row.addStretch()
+                layout.addLayout(h_row)
+            return layout
+
         # Group 1: Search Effort
-        gb_effort = make_group("1. Search Effort & Expansion Displacement")
-        layout_effort = QVBoxLayout(gb_effort)
+        gb_effort = make_group("1. Search Effort & Expansion Displacement", "group_effort")
+        layout_effort = make_group_header(
+            gb_effort, "1. Search Effort & Expansion Displacement", "group_effort"
+        )
         self.table_effort = QTableWidget()
         self.table_effort.setColumnCount(4)
         self.table_effort.setHorizontalHeaderLabels(
@@ -154,8 +183,10 @@ class CanvasSummary(QWidget):
         grid.addWidget(gb_effort, 0, 0)
 
         # Group 2: Unique States & Deduplication
-        gb_states = make_group("2. Unique Expanded States & Deduplication")
-        layout_states = QVBoxLayout(gb_states)
+        gb_states = make_group("2. Unique Expanded States & Deduplication", "group_states")
+        layout_states = make_group_header(
+            gb_states, "2. Unique Expanded States & Deduplication", "group_states"
+        )
         self.table_states = QTableWidget()
         self.table_states.setColumnCount(3)
         self.table_states.setHorizontalHeaderLabels(
@@ -168,8 +199,12 @@ class CanvasSummary(QWidget):
         grid.addWidget(gb_states, 0, 1)
 
         # Group 3: Heuristic Advantage
-        gb_heur = make_group("3. Heuristic Comparison on Valid Common States (Δh = h_B − h_A)")
-        layout_heur = QVBoxLayout(gb_heur)
+        gb_heur = make_group(
+            "3. Heuristic Comparison on Valid Common States (Δh = h_B − h_A)", "group_heur_adv"
+        )
+        layout_heur = make_group_header(
+            gb_heur, "3. Heuristic Comparison (Δh = h_B − h_A)", "group_heur_adv"
+        )
         self.table_heur = QTableWidget()
         self.table_heur.setColumnCount(3)
         self.table_heur.setHorizontalHeaderLabels(["Statistic", "Value", "Interpretation"])
@@ -180,8 +215,8 @@ class CanvasSummary(QWidget):
         grid.addWidget(gb_heur, 1, 0)
 
         # Group 4: Path Cost & Log Diagnostics
-        gb_diag = make_group("4. Path Cost & Log Consistency Diagnostics")
-        layout_diag = QVBoxLayout(gb_diag)
+        gb_diag = make_group("4. Path Cost & Log Consistency Diagnostics", "group_diag")
+        layout_diag = make_group_header(gb_diag, "4. Path Cost & Log Diagnostics", "group_diag")
         self.table_diag = QTableWidget()
         self.table_diag.setColumnCount(3)
         self.table_diag.setHorizontalHeaderLabels(["Diagnostic Check", "Result", "Evaluation"])
@@ -194,8 +229,12 @@ class CanvasSummary(QWidget):
         main_layout.addLayout(grid)
 
         # Group 5: Footprint Occupancy Full Width
-        gb_footprint = make_group("5. 2D Search Footprint Occupancy & Jaccard Overlap")
-        layout_fp = QVBoxLayout(gb_footprint)
+        gb_footprint = make_group(
+            "5. 2D Search Footprint Occupancy & Jaccard Overlap", "group_footprint"
+        )
+        layout_fp = make_group_header(
+            gb_footprint, "5. 2D Search Footprint Occupancy & Jaccard Overlap", "group_footprint"
+        )
         self.table_fp = QTableWidget()
         self.table_fp.setColumnCount(7)
         self.table_fp.setHorizontalHeaderLabels(
@@ -248,7 +287,9 @@ class CanvasSummary(QWidget):
                 db["f"],
             )
             d_dims = max(cA.shape[1] if cA.ndim > 1 else 0, cB.shape[1] if cB.ndim > 1 else 0, 2)
-            all_fp = compute_all_pairwise_footprints(cA, cB, dimensions=d_dims, n_bins=FOOTPRINT_BINS)
+            all_fp = compute_all_pairwise_footprints(
+                cA, cB, dimensions=d_dims, n_bins=FOOTPRINT_BINS
+            )
             band_res = compute_band_comparison(
                 prog_a, da["dev"], prog_b, db["dev"], n_bins=PROGRESS_BINS
             )

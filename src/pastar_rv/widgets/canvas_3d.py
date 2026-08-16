@@ -35,6 +35,9 @@ except ImportError:
     )
 
 
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
+
+
 class CanvasStateSpace(QWidget):
     """
     Adaptive State Space Projections Canvas.
@@ -70,6 +73,7 @@ class CanvasStateSpace(QWidget):
         self.lbl_mode_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.lbl_mode_badge.setStyleSheet("color: #166534;")
         banner_layout.addWidget(self.lbl_mode_badge)
+        banner_layout.addWidget(create_info_badge("banner_3d"))
 
         self.lbl_banner_desc = QLabel("Complete 3D state space (Seq 1 × Seq 2 × Seq 3).")
         self.lbl_banner_desc.setFont(QFont("Segoe UI", 8))
@@ -95,12 +99,14 @@ class CanvasStateSpace(QWidget):
         lbl_3d.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         lbl_3d.setStyleSheet("color: #475569;")
         self.row_3d_ctrl.addWidget(lbl_3d)
+        self.row_3d_ctrl.addWidget(create_info_badge("ctrl_3d_axes"))
 
         self.combo_3d_x = QComboBox()
         self.combo_3d_y = QComboBox()
         self.combo_3d_z = QComboBox()
         for cb in (self.combo_3d_x, self.combo_3d_y, self.combo_3d_z):
             cb.setFont(QFont("Segoe UI", 8))
+            cb.setToolTip(TOOLTIPS["ctrl_3d_axes"])
             cb.currentIndexChanged.connect(self._on_3d_dims_changed)
 
         self.row_3d_ctrl.addWidget(QLabel("X:"))
@@ -114,6 +120,7 @@ class CanvasStateSpace(QWidget):
 
         self.gl_widget = gl.GLViewWidget()
         self.gl_widget.setBackgroundColor("w")
+        self.gl_widget.setToolTip(TOOLTIPS["ctrl_3d_axes"])
         self.scatter_3d = None
         self.grid_item = None
         left_layout.addWidget(self.gl_widget)
@@ -132,16 +139,19 @@ class CanvasStateSpace(QWidget):
         lbl_2d.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         lbl_2d.setStyleSheet("color: #475569;")
         row_2d_ctrl.addWidget(lbl_2d)
+        row_2d_ctrl.addWidget(create_info_badge("ctrl_2d_axes"))
 
         row_2d_ctrl.addWidget(QLabel("X:"))
         self.combo_2d_x = QComboBox()
         self.combo_2d_x.setFont(QFont("Segoe UI", 8))
+        self.combo_2d_x.setToolTip(TOOLTIPS["ctrl_2d_axes"])
         self.combo_2d_x.currentIndexChanged.connect(self._on_2d_dims_changed)
         row_2d_ctrl.addWidget(self.combo_2d_x)
 
         row_2d_ctrl.addWidget(QLabel("Y:"))
         self.combo_2d_y = QComboBox()
         self.combo_2d_y.setFont(QFont("Segoe UI", 8))
+        self.combo_2d_y.setToolTip(TOOLTIPS["ctrl_2d_axes"])
         self.combo_2d_y.currentIndexChanged.connect(self._on_2d_dims_changed)
         row_2d_ctrl.addWidget(self.combo_2d_y)
         row_2d_ctrl.addStretch()
@@ -153,12 +163,15 @@ class CanvasStateSpace(QWidget):
         self.plot_selected_2d.showGrid(x=True, y=True, alpha=0.3)
         self.plot_selected_2d.getAxis("left").setPen("k")
         self.plot_selected_2d.getAxis("bottom").setPen("k")
+        self.plot_selected_2d.setToolTip(TOOLTIPS["ctrl_2d_axes"])
         proj_layout.addWidget(self.plot_selected_2d, stretch=2)
 
         # Secondary 2D projection subplots (e.g. standard pairs)
         sub_row = QHBoxLayout()
         self.plot_sub1 = pg.PlotWidget(title="Projection S1 vs S3")
         self.plot_sub2 = pg.PlotWidget(title="Projection S2 vs S3")
+        self.plot_sub1.setToolTip(TOOLTIPS["ctrl_2d_axes"])
+        self.plot_sub2.setToolTip(TOOLTIPS["ctrl_2d_axes"])
         for p in (self.plot_sub1, self.plot_sub2):
             p.setBackground("w")
             p.showGrid(x=True, y=True, alpha=0.3)
@@ -181,7 +194,13 @@ class CanvasStateSpace(QWidget):
         self.combo_2d_x.blockSignals(True)
         self.combo_2d_y.blockSignals(True)
 
-        for cb in (self.combo_3d_x, self.combo_3d_y, self.combo_3d_z, self.combo_2d_x, self.combo_2d_y):
+        for cb in (
+            self.combo_3d_x,
+            self.combo_3d_y,
+            self.combo_3d_z,
+            self.combo_2d_x,
+            self.combo_2d_y,
+        ):
             cb.clear()
             for d in range(d_dims):
                 cb.addItem(f"Seq {d + 1}", d)
@@ -414,10 +433,7 @@ class CanvasStateSpace(QWidget):
         )
         idx_2d = np.minimum((norm_2d * (len(stops) - 1)).astype(int), len(stops) - 1)
         colors_2d = stops[idx_2d]
-        brushes = [
-            pg.mkBrush(int(r), int(g), int(b), 210)
-            for r, g, b in colors_2d
-        ]
+        brushes = [pg.mkBrush(int(r), int(g), int(b), 210) for r, g, b in colors_2d]
 
         # 1. Main Selected 2D Plot
         px_main = coords[::step_2d, dx] if coords.shape[1] > dx else np.zeros(len(sub_iters_2d))
@@ -439,7 +455,9 @@ class CanvasStateSpace(QWidget):
         self.plot_selected_2d.addItem(item_main)
 
         # Diagonal alignment reference line
-        max_coord = max(px_main.max() if len(px_main) > 0 else 1, py_main.max() if len(py_main) > 0 else 1)
+        max_coord = max(
+            px_main.max() if len(px_main) > 0 else 1, py_main.max() if len(py_main) > 0 else 1
+        )
         diag = pg.PlotCurveItem(
             [0, max_coord],
             [0, max_coord],
@@ -458,8 +476,12 @@ class CanvasStateSpace(QWidget):
             plt_w.setLabel("bottom", f"Seq {p_d0 + 1}")
             plt_w.setLabel("left", f"Seq {p_d1 + 1}")
 
-            sub_x = coords[::step_2d, p_d0] if coords.shape[1] > p_d0 else np.zeros(len(sub_iters_2d))
-            sub_y = coords[::step_2d, p_d1] if coords.shape[1] > p_d1 else np.zeros(len(sub_iters_2d))
+            sub_x = (
+                coords[::step_2d, p_d0] if coords.shape[1] > p_d0 else np.zeros(len(sub_iters_2d))
+            )
+            sub_y = (
+                coords[::step_2d, p_d1] if coords.shape[1] > p_d1 else np.zeros(len(sub_iters_2d))
+            )
 
             sub_item = pg.ScatterPlotItem(
                 x=sub_x,

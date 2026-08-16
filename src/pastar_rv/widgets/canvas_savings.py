@@ -36,6 +36,7 @@ from pastar_rv.metrics import (
     compute_expansion_savings,
     compute_geometric_alignment_progress,
 )
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasSavings(QWidget):
@@ -64,24 +65,33 @@ class CanvasSavings(QWidget):
         banner_layout.setContentsMargins(12, 8, 12, 8)
         banner_layout.setSpacing(20)
 
-        def make_card(title, initial_val="—", color="#1e293b"):
+        def make_card(title, initial_val="—", color="#1e293b", tooltip_key=None):
             card_layout = QVBoxLayout()
             card_layout.setSpacing(2)
+            t_row = QHBoxLayout()
+            t_row.setSpacing(4)
             lbl_title = QLabel(title)
             lbl_title.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             lbl_title.setStyleSheet("color: #64748b; text-transform: uppercase;")
+            t_row.addWidget(lbl_title)
+            if tooltip_key:
+                t_row.addWidget(create_info_badge(tooltip_key))
+            t_row.addStretch()
+
             lbl_val = QLabel(initial_val)
             lbl_val.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
             lbl_val.setStyleSheet(f"color: {color};")
-            card_layout.addWidget(lbl_title)
+            card_layout.addLayout(t_row)
             card_layout.addWidget(lbl_val)
             banner_layout.addLayout(card_layout)
             return lbl_val
 
-        self.card_nodes_a = make_card("Baseline (A) Expansions", "—", "#1f77b4")
-        self.card_nodes_b = make_card("Candidate (B) Expansions", "—", "#d62728")
-        self.card_saved = make_card("Total Nodes Saved (A - B)", "—", "#2563eb")
-        self.card_reduction = make_card("Total Reduction", "—", "#16a34a")
+        self.card_nodes_a = make_card("Baseline (A) Expansions", "—", "#1f77b4", "kpi_expansions_a")
+        self.card_nodes_b = make_card(
+            "Candidate (B) Expansions", "—", "#d62728", "kpi_expansions_b"
+        )
+        self.card_saved = make_card("Total Nodes Saved (A - B)", "—", "#2563eb", "kpi_nodes_saved")
+        self.card_reduction = make_card("Total Reduction", "—", "#16a34a", "kpi_reduction_pct")
         banner_layout.addStretch()
 
         root_layout.addWidget(banner)
@@ -104,6 +114,12 @@ class CanvasSavings(QWidget):
             title="Local Expansion Ratio (B / A) [Ref = 1.0, <1.0 means B used fewer]"
         )
 
+        self.plot_cum.setToolTip(TOOLTIPS["plot_cum_exp"])
+        self.plot_cum_diff.setToolTip(TOOLTIPS["plot_cum_diff"])
+        self.plot_local_saved.setToolTip(TOOLTIPS["plot_local_saved"])
+        self.plot_local_red.setToolTip(TOOLTIPS["plot_local_red"])
+        self.plot_local_ratio.setToolTip(TOOLTIPS["plot_local_ratio"])
+
         self._all_plots = [
             self.plot_cum,
             self.plot_cum_diff,
@@ -119,13 +135,48 @@ class CanvasSavings(QWidget):
             p.getAxis("bottom").setPen("k")
             p.addLegend(offset=(10, 10))
 
-        grid.addWidget(self.plot_cum, 0, 0)
-        grid.addWidget(self.plot_cum_diff, 0, 1)
+        def wrap_plot(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_cum = wrap_plot(self.plot_cum, "Cumulative Expanded Nodes", "plot_cum_exp")
+        w_cum_diff = wrap_plot(
+            self.plot_cum_diff, "Cumulative Expansion Difference (A − B)", "plot_cum_diff"
+        )
+        w_local_saved = wrap_plot(
+            self.plot_local_saved, "Nodes Saved in Region", "plot_local_saved"
+        )
+        w_local_red = wrap_plot(
+            self.plot_local_red,
+            f"Local Expansion Reduction (%) [Min Support: {MIN_BIN_SUPPORT}]",
+            "plot_local_red",
+        )
+        w_local_ratio = wrap_plot(
+            self.plot_local_ratio, "Local Expansion Ratio (B / A)", "plot_local_ratio"
+        )
+
+        grid.addWidget(w_cum, 0, 0)
+        grid.addWidget(w_cum_diff, 0, 1)
 
         bottom_row = QHBoxLayout()
-        bottom_row.addWidget(self.plot_local_saved)
-        bottom_row.addWidget(self.plot_local_red)
-        bottom_row.addWidget(self.plot_local_ratio)
+        bottom_row.addWidget(w_local_saved)
+        bottom_row.addWidget(w_local_red)
+        bottom_row.addWidget(w_local_ratio)
         grid.addLayout(bottom_row, 1, 0, 1, 2)
 
         root_layout.addLayout(grid)

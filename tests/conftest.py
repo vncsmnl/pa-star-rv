@@ -40,7 +40,9 @@ def make_synthetic_data():
         g = np.random.randint(0, 50, size=n_nodes, dtype=np.int32)
         f = h + g
         mean_coords = np.mean(coords, axis=1, keepdims=True)
-        dev = np.sqrt(np.sum((coords - mean_coords) ** 2, axis=1, dtype=np.float64)).astype(np.float32)
+        dev = np.sqrt(np.sum((coords - mean_coords) ** 2, axis=1, dtype=np.float64)).astype(
+            np.float32
+        )
         num_jumps = max(1, n_nodes // 10)
         j_dists = np.random.randint(1, 20, size=num_jumps, dtype=np.int32)
         j_indices = np.random.choice(n_nodes, size=num_jumps, replace=False).astype(np.int32)

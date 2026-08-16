@@ -7,10 +7,14 @@ import numpy as np
 
 try:
     import pyqtgraph as pg
-    from PyQt6.QtWidgets import QGridLayout, QWidget
+    from PyQt6.QtGui import QFont
+    from PyQt6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 except ImportError:
     import pyqtgraph as pg
-    from PyQt5.QtWidgets import QGridLayout, QWidget
+    from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasDynamics(QWidget):
@@ -24,7 +28,8 @@ class CanvasDynamics(QWidget):
 
     def _build_ui(self):
         layout = QGridLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(6)
 
         self.plot_min_h = pg.PlotWidget(title="Local Minimum h(n) of Expanded Nodes")
         self.plot_avg_h = pg.PlotWidget(title="Local Average h(n) of Expanded Nodes")
@@ -33,16 +38,49 @@ class CanvasDynamics(QWidget):
             title="Cumulative Expansion Displacements — Flatter slope = More focused expansion sequence"
         )
 
+        self.plot_min_h.setToolTip(TOOLTIPS["plot_dyn_min_h"])
+        self.plot_avg_h.setToolTip(TOOLTIPS["plot_dyn_avg_h"])
+        self.plot_jdist.setToolTip(TOOLTIPS["plot_dyn_jdist"])
+        self.plot_cumj.setToolTip(TOOLTIPS["plot_dyn_cumj"])
+
         for p in (self.plot_min_h, self.plot_avg_h, self.plot_jdist, self.plot_cumj):
             p.setBackground("w")
             p.showGrid(x=True, y=True, alpha=0.3)
             p.getAxis("left").setPen("k")
             p.getAxis("bottom").setPen("k")
 
-        layout.addWidget(self.plot_min_h, 0, 0)
-        layout.addWidget(self.plot_avg_h, 0, 1)
-        layout.addWidget(self.plot_jdist, 1, 0)
-        layout.addWidget(self.plot_cumj, 1, 1)
+        def wrap_dyn_plot(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_min = wrap_dyn_plot(self.plot_min_h, "Local Minimum h(n)", "plot_dyn_min_h")
+        w_avg = wrap_dyn_plot(self.plot_avg_h, "Local Average h(n)", "plot_dyn_avg_h")
+        w_jdist = wrap_dyn_plot(
+            self.plot_jdist, "Expansion Displacement Distribution (L1)", "plot_dyn_jdist"
+        )
+        w_cumj = wrap_dyn_plot(
+            self.plot_cumj, "Cumulative Expansion Displacements", "plot_dyn_cumj"
+        )
+
+        layout.addWidget(w_min, 0, 0)
+        layout.addWidget(w_avg, 0, 1)
+        layout.addWidget(w_jdist, 1, 0)
+        layout.addWidget(w_cumj, 1, 1)
 
     def set_data(self, data, label=""):
         data_key = id(data)

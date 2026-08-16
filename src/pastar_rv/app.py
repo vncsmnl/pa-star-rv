@@ -48,6 +48,7 @@ except ImportError:
 from pastar_rv.metrics import comparison_cache
 from pastar_rv.parser import parse_log_file
 from pastar_rv.widgets import (
+    TOOLTIPS,
     Canvas3D,
     CanvasBand,
     CanvasDensity,
@@ -56,6 +57,7 @@ from pastar_rv.widgets import (
     CanvasHeuristicComparison,
     CanvasSavings,
     CanvasSummary,
+    create_info_badge,
 )
 
 # ─────────────────────────────────────────────
@@ -150,7 +152,7 @@ class MainWindow(QMainWindow):
         # Button bar
         btn_row = QHBoxLayout()
 
-        def mkbtn(text, color, slot):
+        def mkbtn(text, color, slot, tooltip_key=None):
             b = QPushButton(text)
             b.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             b.setStyleSheet(
@@ -159,13 +161,17 @@ class MainWindow(QMainWindow):
                 f"QPushButton:hover{{background:{color};opacity:0.85;}}"
             )
             b.clicked.connect(slot)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                b.setToolTip(TOOLTIPS[tooltip_key])
             return b
 
-        btn_row.addWidget(mkbtn("📂 Open Log A (Baseline)", P["a"], self.open_a))
-        btn_row.addWidget(mkbtn("📂 Open Log B (Candidate)", P["b"], self.open_b))
+        btn_row.addWidget(mkbtn("📂 Open Log A (Baseline)", P["a"], self.open_a, "btn_open_a"))
+        btn_row.addWidget(mkbtn("📂 Open Log B (Candidate)", P["b"], self.open_b, "btn_open_b"))
         btn_row.addSpacing(20)
-        btn_row.addWidget(mkbtn("💾 Save Current Tab", "#555555", self.save_current))
-        btn_row.addWidget(mkbtn("💾 Export All Tabs", "#333333", self.export_all))
+        btn_row.addWidget(
+            mkbtn("💾 Save Current Tab", "#555555", self.save_current, "btn_save_current")
+        )
+        btn_row.addWidget(mkbtn("💾 Export All Tabs", "#333333", self.export_all, "btn_export_all"))
         btn_row.addStretch()
         root_layout.addLayout(btn_row)
 
@@ -185,12 +191,16 @@ class MainWindow(QMainWindow):
 
         # A/B Switcher
         sw_row = QHBoxLayout()
-        sw_row.addWidget(QLabel("Viewing in single-file tabs:"))
+        lbl_sw = QLabel("Viewing in single-file tabs:")
+        lbl_sw.setFont(QFont("Segoe UI", 9))
+        sw_row.addWidget(lbl_sw)
         self.rb_a = QRadioButton("A")
         self.rb_a.setChecked(True)
         self.rb_b = QRadioButton("B")
         self.rb_a.setStyleSheet(f"color:{P['a']};font-weight:bold")
         self.rb_b.setStyleSheet(f"color:{P['b']};font-weight:bold")
+        self.rb_a.setToolTip(TOOLTIPS["switcher_single"])
+        self.rb_b.setToolTip(TOOLTIPS["switcher_single"])
         self._rb_group = QButtonGroup()
         self._rb_group.addButton(self.rb_a)
         self._rb_group.addButton(self.rb_b)
@@ -198,6 +208,8 @@ class MainWindow(QMainWindow):
         self.rb_b.toggled.connect(self._on_switch)
         sw_row.addWidget(self.rb_a)
         sw_row.addWidget(self.rb_b)
+        sw_row.addSpacing(4)
+        sw_row.addWidget(create_info_badge("switcher_single"))
         sw_row.addStretch()
         root_layout.addLayout(sw_row)
 
@@ -236,8 +248,11 @@ class MainWindow(QMainWindow):
         self._canvases["dynamics"] = CanvasDynamics()
         self._canvases["classic"] = Canvas3D()
 
-        for key, label in TAB_DEFS:
+        for idx, (key, label) in enumerate(TAB_DEFS):
             self.tabs.addTab(self._canvases[key], label)
+            tooltip_key = f"tab_{key}"
+            if tooltip_key in TOOLTIPS:
+                self.tabs.setTabToolTip(idx, TOOLTIPS[tooltip_key])
 
         self.tabs.currentChanged.connect(lambda _: self._update_active_tab())
 

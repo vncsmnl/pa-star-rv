@@ -38,6 +38,7 @@ from pastar_rv.metrics import (
     compute_common_states_analysis,
     compute_geometric_alignment_progress,
 )
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasHeuristicComparison(QWidget):
@@ -67,26 +68,33 @@ class CanvasHeuristicComparison(QWidget):
         banner_layout.setContentsMargins(12, 8, 12, 8)
         banner_layout.setSpacing(20)
 
-        def make_card(title, initial_val="—", color="#1e293b"):
+        def make_card(title, initial_val="—", color="#1e293b", tooltip_key=None):
             card_layout = QVBoxLayout()
             card_layout.setSpacing(2)
+            t_row = QHBoxLayout()
+            t_row.setSpacing(4)
             lbl_title = QLabel(title)
             lbl_title.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             lbl_title.setStyleSheet("color: #64748b; text-transform: uppercase;")
+            t_row.addWidget(lbl_title)
+            if tooltip_key:
+                t_row.addWidget(create_info_badge(tooltip_key))
+            t_row.addStretch()
+
             lbl_val = QLabel(initial_val)
             lbl_val.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
             lbl_val.setStyleSheet(f"color: {color};")
-            card_layout.addWidget(lbl_title)
+            card_layout.addLayout(t_row)
             card_layout.addWidget(lbl_val)
             banner_layout.addLayout(card_layout)
             return lbl_val
 
-        self.card_common = make_card("Valid Common States", "—", "#0f172a")
-        self.card_mean_dh = make_card("Mean Δh (h_B − h_A)", "—", "#2563eb")
-        self.card_median_dh = make_card("Median Δh", "—", "#2563eb")
-        self.card_pct_pos = make_card("% Δh > 0 (B > A)", "—", "#16a34a")
-        self.card_g_diag = make_card("Common g Match (g_A == g_B)", "—", "#7c3aed")
-        self.card_f_diag = make_card("f == g + h Log Check", "—", "#059669")
+        self.card_common = make_card("Valid Common States", "—", "#0f172a", "kpi_common_states")
+        self.card_mean_dh = make_card("Mean Δh (h_B − h_A)", "—", "#2563eb", "group_heur_adv")
+        self.card_median_dh = make_card("Median Δh", "—", "#2563eb", "group_heur_adv")
+        self.card_pct_pos = make_card("% Δh > 0 (B > A)", "—", "#16a34a", "group_heur_adv")
+        self.card_g_diag = make_card("Common g Match (g_A == g_B)", "—", "#7c3aed", "group_diag")
+        self.card_f_diag = make_card("f == g + h Log Check", "—", "#059669", "group_diag")
         banner_layout.addStretch()
 
         root_layout.addWidget(banner)
@@ -110,6 +118,12 @@ class CanvasHeuristicComparison(QWidget):
             title="h_A × h_B on Valid Common Unique States (Reference: y = x)"
         )
 
+        self.plot_h_profile.setToolTip(TOOLTIPS["plot_h_profile"])
+        self.plot_g_profile.setToolTip(TOOLTIPS["plot_g_profile"])
+        self.plot_f_profile.setToolTip(TOOLTIPS["plot_f_profile"])
+        self.plot_dh_hist.setToolTip(TOOLTIPS["plot_dh_hist"])
+        self.plot_scatter_h.setToolTip(TOOLTIPS["plot_scatter_h"])
+
         for p in (
             self.plot_h_profile,
             self.plot_g_profile,
@@ -123,14 +137,49 @@ class CanvasHeuristicComparison(QWidget):
             p.getAxis("bottom").setPen("k")
             p.addLegend(offset=(10, 10))
 
+        def wrap_heur_plot(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_h = wrap_heur_plot(
+            self.plot_h_profile, "Heuristic h(n) Profile by Progress", "plot_h_profile"
+        )
+        w_g = wrap_heur_plot(
+            self.plot_g_profile, "Path Cost g(n) Profile by Progress", "plot_g_profile"
+        )
+        w_f = wrap_heur_plot(
+            self.plot_f_profile, "Evaluation f(n) Profile by Progress", "plot_f_profile"
+        )
+        w_dh = wrap_heur_plot(
+            self.plot_dh_hist, "Δh Distribution (h_B − h_A) on Common States", "plot_dh_hist"
+        )
+        w_sc = wrap_heur_plot(
+            self.plot_scatter_h, "h_A × h_B Scatter on Common States", "plot_scatter_h"
+        )
+
         top_row = QHBoxLayout()
-        top_row.addWidget(self.plot_h_profile)
-        top_row.addWidget(self.plot_g_profile)
-        top_row.addWidget(self.plot_f_profile)
+        top_row.addWidget(w_h)
+        top_row.addWidget(w_g)
+        top_row.addWidget(w_f)
         grid.addLayout(top_row, 0, 0, 1, 2)
 
-        grid.addWidget(self.plot_dh_hist, 1, 0)
-        grid.addWidget(self.plot_scatter_h, 1, 1)
+        grid.addWidget(w_dh, 1, 0)
+        grid.addWidget(w_sc, 1, 1)
 
         root_layout.addLayout(grid)
 

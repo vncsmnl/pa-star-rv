@@ -11,6 +11,7 @@ from pastar_rv.widgets.canvas_footprint import CanvasFootprint
 from pastar_rv.widgets.canvas_heuristic import CanvasHeuristicComparison
 from pastar_rv.widgets.canvas_savings import CanvasSavings
 from pastar_rv.widgets.canvas_summary import CanvasSummary
+from pastar_rv.widgets.info_helper import TOOLTIPS, InfoBadge, create_info_badge, format_tooltip
 
 __all__ = [
     "Canvas3D",
@@ -22,5 +23,8 @@ __all__ = [
     "CanvasHeuristicComparison",
     "CanvasSavings",
     "CanvasSummary",
+    "InfoBadge",
+    "TOOLTIPS",
+    "create_info_badge",
+    "format_tooltip",
 ]
-

@@ -99,7 +99,6 @@ def test_canvases_synthetic_data_6d(qapp, make_synthetic_data):
     density.combo_y.setCurrentIndex(4)
 
 
-
 def test_mainwindow_flow(qapp, make_synthetic_data):
     win = MainWindow()
     data_a = make_synthetic_data(n_nodes=500, max_coord=100, is_candidate=False)
@@ -122,5 +121,30 @@ def test_mainwindow_flow(qapp, make_synthetic_data):
         canvas = win._canvases[TAB_DEFS[idx][0]]
         pixmap = canvas.grab()
         assert not pixmap.isNull()
+
+    win.close()
+
+
+def test_info_badges_and_tooltips(qapp):
+    from pastar_rv.widgets.info_helper import TOOLTIPS, InfoBadge, create_info_badge
+
+    # Test TOOLTIPS contents
+    assert len(TOOLTIPS) >= 25
+    for text in TOOLTIPS.values():
+        assert "ℹ" in text
+        assert "div" in text
+
+    # Test InfoBadge creation
+    badge = create_info_badge("btn_open_a")
+    assert isinstance(badge, InfoBadge)
+    assert badge.text() == "ℹ"
+    assert "Abrir Log A" in badge.toolTip()
+
+    # Test MainWindow tab tooltips
+    win = MainWindow()
+    for idx in range(win.tabs.count()):
+        tip = win.tabs.tabToolTip(idx)
+        assert tip is not None and len(tip) > 0
+        assert "ℹ" in tip
 
     win.close()

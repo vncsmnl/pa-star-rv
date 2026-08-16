@@ -401,8 +401,16 @@ def compute_all_pairwise_footprints(coords_a, coords_b, dimensions=None, n_bins=
             - 'footprints': dict mapping (d0, d1) -> footprint dict from compute_footprint_data
             - 'mean_jaccard': float
     """
-    cA = np.asarray(coords_a, dtype=np.int32) if coords_a is not None else np.empty((0, 2), dtype=np.int32)
-    cB = np.asarray(coords_b, dtype=np.int32) if coords_b is not None else np.empty((0, 2), dtype=np.int32)
+    cA = (
+        np.asarray(coords_a, dtype=np.int32)
+        if coords_a is not None
+        else np.empty((0, 2), dtype=np.int32)
+    )
+    cB = (
+        np.asarray(coords_b, dtype=np.int32)
+        if coords_b is not None
+        else np.empty((0, 2), dtype=np.int32)
+    )
 
     if dimensions is None:
         dim_a = cA.shape[1] if cA.ndim > 1 and cA.shape[0] > 0 else 0
@@ -496,7 +504,11 @@ def deduplicate_and_diagnose_states(coords, h, g):
             - 'inconsistent_g_count': int
     """
     if coords is None or len(coords) == 0:
-        d = coords.shape[1] if (coords is not None and hasattr(coords, "shape") and coords.ndim > 1) else 0
+        d = (
+            coords.shape[1]
+            if (coords is not None and hasattr(coords, "shape") and coords.ndim > 1)
+            else 0
+        )
         return {
             "unique_coords": np.empty((0, d), dtype=np.int32),
             "unique_h": np.empty(0, dtype=np.int32),

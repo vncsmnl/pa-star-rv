@@ -8,16 +8,20 @@ import numpy as np
 try:
     import pyqtgraph as pg
     from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import (
         QHBoxLayout,
+        QLabel,
         QVBoxLayout,
         QWidget,
     )
 except ImportError:
     import pyqtgraph as pg
     from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
         QHBoxLayout,
+        QLabel,
         QVBoxLayout,
         QWidget,
     )
@@ -27,6 +31,7 @@ from pastar_rv.metrics import (
     compute_band_comparison,
     compute_geometric_alignment_progress,
 )
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasBand(QWidget):
@@ -64,13 +69,51 @@ class CanvasBand(QWidget):
             title="Global Band Deviation Distribution (Normalized Density)"
         )
 
+        self.plot_profile.setToolTip(TOOLTIPS["plot_band_profile"])
+        self.plot_dist_abs.setToolTip(TOOLTIPS["plot_band_dist_abs"])
+        self.plot_dist_density.setToolTip(TOOLTIPS["plot_band_dist_density"])
+
         for p in (self.plot_profile, self.plot_dist_abs, self.plot_dist_density):
             p.setBackground("w")
             p.showGrid(x=True, y=True, alpha=0.3)
             p.getAxis("left").setPen("k")
             p.getAxis("bottom").setPen("k")
             p.addLegend(offset=(10, 10))
-            plots_layout.addWidget(p)
+
+        def wrap_band_plot(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_prof = wrap_band_plot(
+            self.plot_profile, "Search Band Width by Progress", "plot_band_profile"
+        )
+        w_abs = wrap_band_plot(
+            self.plot_dist_abs, "Deviation Distribution (Absolute Count)", "plot_band_dist_abs"
+        )
+        w_dens = wrap_band_plot(
+            self.plot_dist_density,
+            "Deviation Distribution (Normalized Density)",
+            "plot_band_dist_density",
+        )
+
+        plots_layout.addWidget(w_prof)
+        plots_layout.addWidget(w_abs)
+        plots_layout.addWidget(w_dens)
 
         root_layout.addLayout(plots_layout)
 

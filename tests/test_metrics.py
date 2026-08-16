@@ -282,4 +282,3 @@ def test_d_dimensional_common_states_6d():
     assert res["num_only_b"] == 1
     assert res["num_valid_h_common"] == 1
     assert res["delta_h"][0] == 10.0  # 60 - 50 = +10
-

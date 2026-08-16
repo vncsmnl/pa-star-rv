@@ -48,6 +48,7 @@ from pastar_rv.metrics import (
     compute_all_pairwise_footprints,
     get_pair_label,
 )
+from pastar_rv.widgets.info_helper import TOOLTIPS, create_info_badge
 
 
 class CanvasFootprint(QWidget):
@@ -114,6 +115,7 @@ class CanvasFootprint(QWidget):
         self.lbl_banner_title.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.lbl_banner_title.setStyleSheet("color: #1e293b;")
         header_row.addWidget(self.lbl_banner_title)
+        header_row.addWidget(create_info_badge("footprint_table"))
 
         lbl_note = QLabel(
             "Note: 2D footprint is a projection of D-dimensional space; "
@@ -141,6 +143,7 @@ class CanvasFootprint(QWidget):
         self.table_occ.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_occ.setFixedHeight(115)
         self.table_occ.setFont(QFont("Segoe UI", 8))
+        self.table_occ.setToolTip(TOOLTIPS["footprint_table"])
         self.table_occ.cellClicked.connect(self._on_table_row_clicked)
         banner_layout.addWidget(self.table_occ)
 
@@ -154,6 +157,18 @@ class CanvasFootprint(QWidget):
         matrix_container = QWidget()
         matrix_outer_layout = QVBoxLayout(matrix_container)
         matrix_outer_layout.setContentsMargins(4, 4, 4, 4)
+        matrix_outer_layout.setSpacing(4)
+
+        matrix_hdr = QHBoxLayout()
+        lbl_mat = QLabel(
+            "<b>Pairwise Projections Matrix (All D*(D-1)/2 Pairs · Absolute Exp. Diff)</b>"
+        )
+        lbl_mat.setFont(QFont("Segoe UI", 9))
+        lbl_mat.setStyleSheet("color: #1e293b;")
+        matrix_hdr.addWidget(lbl_mat)
+        matrix_hdr.addWidget(create_info_badge("matrix_view"))
+        matrix_hdr.addStretch()
+        matrix_outer_layout.addLayout(matrix_hdr)
 
         matrix_scroll = QScrollArea()
         matrix_scroll.setWidgetResizable(True)
@@ -166,6 +181,7 @@ class CanvasFootprint(QWidget):
 
         matrix_outer_layout.addWidget(matrix_scroll)
         self.view_tabs.addTab(matrix_container, "📊 Pairwise Projections Matrix")
+        self.view_tabs.setTabToolTip(0, TOOLTIPS["matrix_view"])
 
         # ── Tab 2: Detailed Pair Analysis (4 Heatmaps) ──
         detail_container = QWidget()
@@ -181,8 +197,10 @@ class CanvasFootprint(QWidget):
 
         self.combo_detail_pair = QComboBox()
         self.combo_detail_pair.setFont(QFont("Segoe UI", 9))
+        self.combo_detail_pair.setToolTip(TOOLTIPS["detail_pair_selector"])
         self.combo_detail_pair.currentIndexChanged.connect(self._on_detail_pair_changed)
         detail_ctrl_row.addWidget(self.combo_detail_pair)
+        detail_ctrl_row.addWidget(create_info_badge("detail_pair_selector"))
         detail_ctrl_row.addSpacing(20)
 
         self.lbl_detail_jaccard = QLabel("Jaccard: —")
@@ -205,6 +223,11 @@ class CanvasFootprint(QWidget):
             title="Relative Density Diff (Blue=A denser | Red=B denser)"
         )
 
+        self.plot_detail_a.setToolTip(TOOLTIPS["plot_detail_a"])
+        self.plot_detail_b.setToolTip(TOOLTIPS["plot_detail_b"])
+        self.plot_detail_diff_abs.setToolTip(TOOLTIPS["plot_detail_diff_abs"])
+        self.plot_detail_diff_rel.setToolTip(TOOLTIPS["plot_detail_diff_rel"])
+
         for p in (
             self.plot_detail_a,
             self.plot_detail_b,
@@ -216,13 +239,46 @@ class CanvasFootprint(QWidget):
             p.getAxis("left").setPen("k")
             p.getAxis("bottom").setPen("k")
 
-        detail_grid.addWidget(self.plot_detail_a, 0, 0)
-        detail_grid.addWidget(self.plot_detail_b, 0, 1)
-        detail_grid.addWidget(self.plot_detail_diff_abs, 1, 0)
-        detail_grid.addWidget(self.plot_detail_diff_rel, 1, 1)
+        def wrap_detail(plot_widget, title_text, tooltip_key):
+            container = QWidget()
+            vbox = QVBoxLayout(container)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            vbox.setSpacing(2)
+            h_row = QHBoxLayout()
+            h_row.setContentsMargins(2, 0, 2, 0)
+            h_row.setSpacing(4)
+            lbl = QLabel(f"<b>{title_text}</b>")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setStyleSheet("color: #1e293b;")
+            h_row.addWidget(lbl)
+            if tooltip_key and tooltip_key in TOOLTIPS:
+                h_row.addWidget(create_info_badge(tooltip_key))
+            h_row.addStretch()
+            vbox.addLayout(h_row)
+            vbox.addWidget(plot_widget)
+            return container
+
+        w_a = wrap_detail(self.plot_detail_a, "Dataset A (Log Count)", "plot_detail_a")
+        w_b = wrap_detail(self.plot_detail_b, "Dataset B (Log Count)", "plot_detail_b")
+        w_diff_abs = wrap_detail(
+            self.plot_detail_diff_abs,
+            "Absolute Expansion Diff (Blue=A | Red=B)",
+            "plot_detail_diff_abs",
+        )
+        w_diff_rel = wrap_detail(
+            self.plot_detail_diff_rel,
+            "Relative Density Diff (Blue=A denser | Red=B denser)",
+            "plot_detail_diff_rel",
+        )
+
+        detail_grid.addWidget(w_a, 0, 0)
+        detail_grid.addWidget(w_b, 0, 1)
+        detail_grid.addWidget(w_diff_abs, 1, 0)
+        detail_grid.addWidget(w_diff_rel, 1, 1)
         detail_layout.addLayout(detail_grid)
 
         self.view_tabs.addTab(detail_container, "🔍 Detailed Pair View (4 Heatmaps)")
+        self.view_tabs.setTabToolTip(1, TOOLTIPS["plot_detail_a"])
 
         root_layout.addWidget(self.view_tabs)
 
@@ -303,7 +359,9 @@ class CanvasFootprint(QWidget):
             lbl = QLabel(f"<b>Seq {j + 1} (S{j + 1})</b>")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            lbl.setStyleSheet("color: #1e293b; background: #e2e8f0; padding: 4px; border-radius: 4px;")
+            lbl.setStyleSheet(
+                "color: #1e293b; background: #e2e8f0; padding: 4px; border-radius: 4px;"
+            )
             self.matrix_grid_layout.addWidget(lbl, 0, col_idx + 1)
 
         # Add Row Headers and Plots for Upper-Triangular Matrix
@@ -311,7 +369,9 @@ class CanvasFootprint(QWidget):
             lbl = QLabel(f"<b>Seq {i + 1}<br>(S{i + 1})</b>")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            lbl.setStyleSheet("color: #1e293b; background: #e2e8f0; padding: 4px; border-radius: 4px;")
+            lbl.setStyleSheet(
+                "color: #1e293b; background: #e2e8f0; padding: 4px; border-radius: 4px;"
+            )
             self.matrix_grid_layout.addWidget(lbl, row_idx + 1, 0)
 
             for col_idx, j in enumerate(range(1, d_dims)):
@@ -347,7 +407,11 @@ class CanvasFootprint(QWidget):
                     diag = pg.PlotCurveItem(
                         [0, lim],
                         [0, lim],
-                        pen=pg.mkPen(color=(100, 100, 100, 150), width=1.0, style=pg.QtCore.Qt.PenStyle.DashLine),
+                        pen=pg.mkPen(
+                            color=(100, 100, 100, 150),
+                            width=1.0,
+                            style=pg.QtCore.Qt.PenStyle.DashLine,
+                        ),
                     )
                     p_diff.addItem(diag)
 
