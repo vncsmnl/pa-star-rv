@@ -9,6 +9,7 @@ try:
     import pyqtgraph as pg
     from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QFrame,
         QHBoxLayout,
@@ -20,6 +21,7 @@ except ImportError:
     import pyqtgraph as pg
     from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QFrame,
         QHBoxLayout,
@@ -98,6 +100,20 @@ class CanvasDensity(QWidget):
         self.combo_y.currentIndexChanged.connect(self._on_dims_changed)
         ctrl_layout.addWidget(self.combo_y)
 
+        ctrl_layout.addSpacing(10)
+        self.chk_log_intensity = QCheckBox("Log₁₊ scale intensity")
+        self.chk_log_intensity.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.chk_log_intensity.setStyleSheet(
+            "QCheckBox { color: #1e293b; padding-right: 4px; }"
+            "QCheckBox:hover { color: #0284c7; }"
+        )
+        self.chk_log_intensity.setChecked(True)
+        self.chk_log_intensity.setToolTip(TOOLTIPS["chk_log_density_intensity"])
+        self.chk_log_intensity.toggled.connect(self._on_dims_changed)
+        ctrl_layout.addWidget(self.chk_log_intensity)
+        ctrl_layout.addWidget(create_info_badge("chk_log_density_intensity"))
+
+        ctrl_layout.addSpacing(10)
         self.lbl_info = QLabel("—")
         self.lbl_info.setFont(QFont("Segoe UI", 8))
         self.lbl_info.setStyleSheet("color: #64748b; font-style: italic;")
@@ -216,6 +232,8 @@ class CanvasDensity(QWidget):
             dy = 1 if d_dims > 1 else 0
 
         BINS = 100
+        is_log = self.chk_log_intensity.isChecked()
+        scale_tag = "[Log₁₊]" if is_log else "[Linear]"
 
         # Helper to compute and render heatmap
         def _plot_density(plt_widget, d0, d1, title_text):
@@ -223,16 +241,16 @@ class CanvasDensity(QWidget):
             y = coords[:, d1] if coords.shape[1] > d1 else np.zeros(n_points)
 
             H, xe, ye = np.histogram2d(x, y, bins=BINS)
-            H_log = np.log1p(H)
-            max_val = max(1.0, H_log.max())
-            H_norm = H_log / max_val
+            H_trans = np.log1p(H) if is_log else H
+            max_val = max(1.0, float(H_trans.max()))
+            H_norm = H_trans / max_val
 
             rect_x = xe[-1] - xe[0]
             rect_y = ye[-1] - ye[0]
             lim = max(xe[-1], ye[-1], 1.0)
 
             plt_widget.clear()
-            plt_widget.setTitle(title_text)
+            plt_widget.setTitle(f"{title_text} {scale_tag}")
             plt_widget.setLabel("bottom", f"Seq {d0 + 1}")
             plt_widget.setLabel("left", f"Seq {d1 + 1}")
 

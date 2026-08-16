@@ -339,6 +339,61 @@ TOOLTIPS = {
         "Escolha quais 2 sequências serão exibidas no gráfico de dispersão 2D com gradiente de cores temporal.",
         "Cores acompanham a linha do tempo: azul (primeiras iterações) → verde/amarelo → vermelho (iterações finais).",
     ),
+    # ── Contextual Log Scale Checkboxes ──
+    "chk_log_cum_exp": format_tooltip(
+        "Escala Logarítmica Y (Expansões Acumuladas)",
+        "Exibe o eixo Y das expansões acumuladas em escala logarítmica (10¹, 10², 10³, ...).",
+        "Permite comparar ordens de magnitude e analisar a taxa de crescimento exponencial das expansões nos estágios iniciais e intermediários da busca.",
+        formula="y_log = log10(cum_expansions)",
+    ),
+    "chk_log_local_ratio": format_tooltip(
+        "Escala Logarítmica Y (Razão B / A)",
+        "Exibe a razão de expansão local (B / A) em escala logarítmica simétrica ao redor de 1.0 (10⁰).",
+        "Garante simetria multiplicativa: uma redução de 10x (razão 0.1) e um aumento de 10x (razão 10.0) têm a mesma distância visual em relação à linha de referência 1.0.",
+        formula="y_log = log10(B / A)",
+    ),
+    "chk_log_band_dist_abs": format_tooltip(
+        "Escala Logarítmica Y (Contagem de Desvios)",
+        "Exibe o eixo Y da distribuição de desvios da diagonal em escala logarítmica (log₁₀).",
+        "Como a grande maioria dos nós se concentra próximo à diagonal (desvio 0 a 3), a escala linear oculta a cauda. A escala logarítmica revela toda a extensão da faixa de busca.",
+        formula="y_log = log10(count + 1)",
+    ),
+    "chk_log_band_dist_density": format_tooltip(
+        "Escala Logarítmica Y (Densidade de Probabilidade)",
+        "Exibe a densidade de probabilidade de desvio em escala logarítmica.",
+        "Torna visíveis probabilidades raras (10⁻³ a 10⁻⁶) nas bordas da faixa de busca.",
+        formula="y_log = log10(density)",
+    ),
+    "chk_log_dh_hist": format_tooltip(
+        "Escala Logarítmica Y (Frequência de Δh)",
+        "Exibe o histograma de diferenças heurísticas Δh = h_B − h_A em escala logarítmica (log₁₀).",
+        "Impede que o pico massivo em Δh = 0 mascare a distribuição das caudas onde uma heurística superou a outra.",
+        formula="y_log = log10(count + 1)",
+    ),
+    "chk_log_dyn_jdist": format_tooltip(
+        "Escala Logarítmica Y (Frequência de Saltos L1)",
+        "Exibe a frequência dos saltos de deslocamento em escala logarítmica.",
+        "Como a maioria dos passos tem tamanho 1, a escala linear oculta saltos longos decorrentes de troca de filas ou heurísticas. A escala log revela toda a cauda pesada de saltos.",
+        formula="y_log = log10(count + 1)",
+    ),
+    "chk_log_dyn_cumj": format_tooltip(
+        "Escala Logarítmica Y (Deslocamentos Acumulados)",
+        "Exibe a curva de deslocamentos acumulados em escala logarítmica.",
+        "Facilita a observação de acelerações no número de saltos em diferentes fases da execução.",
+        formula="y_log = log10(cum_displacements)",
+    ),
+    "chk_log_density_intensity": format_tooltip(
+        "Intensidade em Escala Logarítmica (log₁₊)",
+        "Alterna a normalização do mapa de calor entre log₁₊(H) e escala linear direta H.",
+        "Ativado (Log): destaca limites de exploração pouco visitados e regiões esparsas. Desativado (Linear): destaca hotspots e núcleos de alta densidade de expansão.",
+        formula="I_norm = log(1 + H) / log(1 + H_max)",
+    ),
+    "chk_log_footprint_intensity": format_tooltip(
+        "Intensidade em Escala Logarítmica (log₁₊)",
+        "Alterna os mapas de calor individuais dos Datasets A e B entre escala log₁₊ e linear.",
+        "Ativado: destaca a fronteira e nós isolados. Desativado: destaca as regiões com maior concentração absoluta de expansões.",
+        formula="I_norm = log(1 + H) / log(1 + H_max)",
+    ),
 }
 
 

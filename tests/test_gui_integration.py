@@ -148,3 +148,70 @@ def test_info_badges_and_tooltips(qapp):
         assert "ℹ" in tip
 
     win.close()
+
+
+def test_log_scale_checkboxes(qapp, make_synthetic_data):
+    data_a = make_synthetic_data(n_nodes=600, max_coord=80, is_candidate=False, dimensions=3)
+    data_b = make_synthetic_data(n_nodes=400, max_coord=80, is_candidate=True, dimensions=3)
+
+    # 1. CanvasSavings
+    savings = CanvasSavings()
+    savings.set_data(data_a, data_b, "Synth_A", "Synth_B")
+    savings.chk_log_cum.setChecked(True)
+    assert savings.plot_cum.getAxis("left").logMode is True
+    assert "Log₁₀" in savings.plot_cum.plotItem.axes["left"]["item"].labelText
+    savings.chk_log_ratio.setChecked(True)
+    assert savings.plot_local_ratio.getAxis("left").logMode is True
+    assert "Log₁₀" in savings.plot_local_ratio.plotItem.axes["left"]["item"].labelText
+    savings.chk_log_cum.setChecked(False)
+    assert savings.plot_cum.getAxis("left").logMode is False
+    savings.chk_log_ratio.setChecked(False)
+    assert savings.plot_local_ratio.getAxis("left").logMode is False
+
+    # 2. CanvasBand
+    band = CanvasBand()
+    band.set_data_comparison(data_a, data_b, "Synth_A", "Synth_B")
+    band.chk_log_dist_abs.setChecked(True)
+    assert "Log₁₀" in band.plot_dist_abs.plotItem.axes["left"]["item"].labelText
+    band.chk_log_dist_density.setChecked(True)
+    assert "Log₁₀" in band.plot_dist_density.plotItem.axes["left"]["item"].labelText
+    band.chk_log_dist_abs.setChecked(False)
+    band.chk_log_dist_density.setChecked(False)
+    # Also test single mode
+    band.set_data(data_a, "Synth_A")
+    band.chk_log_dist_abs.setChecked(True)
+    band.chk_log_dist_density.setChecked(True)
+
+    # 3. CanvasDynamics
+    dynamics = CanvasDynamics()
+    dynamics.set_data(data_a, "Synth_A")
+    dynamics.chk_log_jdist.setChecked(True)
+    assert "Log₁₀" in dynamics.plot_jdist.plotItem.axes["left"]["item"].labelText
+    dynamics.chk_log_cumj.setChecked(True)
+    assert dynamics.plot_cumj.getAxis("left").logMode is True
+    dynamics.chk_log_jdist.setChecked(False)
+    dynamics.chk_log_cumj.setChecked(False)
+
+    # 4. CanvasHeuristicComparison
+    heuristic = CanvasHeuristicComparison()
+    heuristic.set_data(data_a, data_b, "Synth_A", "Synth_B")
+    heuristic.chk_log_dh.setChecked(True)
+    assert "Log₁₀" in heuristic.plot_dh_hist.plotItem.axes["left"]["item"].labelText
+    heuristic.chk_log_dh.setChecked(False)
+    assert "Number of Common States" in heuristic.plot_dh_hist.plotItem.axes["left"]["item"].labelText
+
+    # 5. CanvasDensity
+    density = CanvasDensity()
+    density.set_data(data_a, "Synth_A")
+    assert density.chk_log_intensity.isChecked() is True
+    assert "[Log₁₊]" in density.plot_main.plotItem.titleLabel.text
+    density.chk_log_intensity.setChecked(False)
+    assert "[Linear]" in density.plot_main.plotItem.titleLabel.text
+
+    # 6. CanvasFootprint
+    footprint = CanvasFootprint()
+    footprint.set_data(data_a, data_b, "Synth_A", "Synth_B")
+    assert footprint.chk_log_intensity.isChecked() is True
+    assert "[Log₁₊ Count]" in footprint.plot_detail_a.plotItem.titleLabel.text
+    footprint.chk_log_intensity.setChecked(False)
+    assert "[Linear Count]" in footprint.plot_detail_a.plotItem.titleLabel.text

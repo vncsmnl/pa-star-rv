@@ -11,6 +11,7 @@ try:
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import (
+        QCheckBox,
         QFrame,
         QGridLayout,
         QHBoxLayout,
@@ -23,6 +24,7 @@ except ImportError:
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
+        QCheckBox,
         QFrame,
         QGridLayout,
         QHBoxLayout,
@@ -52,6 +54,7 @@ class CanvasHeuristicComparison(QWidget):
         super().__init__(parent)
         self._current_key = None
         self._cache = {}
+        self._common_res = None
         self._build_ui()
 
     def _build_ui(self):
@@ -137,7 +140,11 @@ class CanvasHeuristicComparison(QWidget):
             p.getAxis("bottom").setPen("k")
             p.addLegend(offset=(10, 10))
 
-        def wrap_heur_plot(plot_widget, title_text, tooltip_key):
+        self.chk_log_dh = QCheckBox("Log Y")
+        self.chk_log_dh.setToolTip(TOOLTIPS["chk_log_dh_hist"])
+        self.chk_log_dh.toggled.connect(self._on_log_dh_toggled)
+
+        def wrap_heur_plot(plot_widget, title_text, tooltip_key, log_checkbox=None):
             container = QWidget()
             vbox = QVBoxLayout(container)
             vbox.setContentsMargins(0, 0, 0, 0)
@@ -152,6 +159,13 @@ class CanvasHeuristicComparison(QWidget):
             if tooltip_key and tooltip_key in TOOLTIPS:
                 h_row.addWidget(create_info_badge(tooltip_key))
             h_row.addStretch()
+            if log_checkbox is not None:
+                log_checkbox.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+                log_checkbox.setStyleSheet(
+                    "QCheckBox { color: #475569; padding-right: 4px; }"
+                    "QCheckBox:hover { color: #0f172a; }"
+                )
+                h_row.addWidget(log_checkbox)
             vbox.addLayout(h_row)
             vbox.addWidget(plot_widget)
             return container
@@ -166,7 +180,10 @@ class CanvasHeuristicComparison(QWidget):
             self.plot_f_profile, "Evaluation f(n) Profile by Progress", "plot_f_profile"
         )
         w_dh = wrap_heur_plot(
-            self.plot_dh_hist, "Δh Distribution (h_B − h_A) on Common States", "plot_dh_hist"
+            self.plot_dh_hist,
+            "Δh Distribution (h_B − h_A) on Common States",
+            "plot_dh_hist",
+            self.chk_log_dh,
         )
         w_sc = wrap_heur_plot(
             self.plot_scatter_h, "h_A × h_B Scatter on Common States", "plot_scatter_h"
@@ -182,6 +199,72 @@ class CanvasHeuristicComparison(QWidget):
         grid.addWidget(w_sc, 1, 1)
 
         root_layout.addLayout(grid)
+
+    def _on_log_dh_toggled(self):
+        if self._common_res is not None:
+            self._render_dh_plot(self._common_res)
+
+    def _render_dh_plot(self, common_res):
+        self.plot_dh_hist.clear()
+        self.plot_dh_hist.setLabel("bottom", "Δh = h_B(s) - h_A(s)")
+        is_log = self.chk_log_dh.isChecked()
+
+        if is_log:
+            self.plot_dh_hist.setLabel("left", "Number of Common States (Log₁₀)")
+        else:
+            self.plot_dh_hist.setLabel("left", "Number of Common States")
+
+        delta_h = common_res["delta_h"]
+        if len(delta_h) == 0:
+            return
+
+        min_dh = delta_h.min()
+        max_dh = delta_h.max()
+        if min_dh == max_dh:
+            bins = np.array([min_dh - 1.0, min_dh + 1.0])
+        else:
+            bins = np.linspace(min_dh, max_dh, 60)
+
+        hist_y, hist_x = np.histogram(delta_h, bins=bins)
+
+        if is_log:
+            y_height = np.log10(np.maximum(hist_y, 1.0))
+            max_val = float(np.max(y_height)) if len(y_height) > 0 else 1.0
+            max_log = max(1, int(np.ceil(max_val)))
+            labels = {
+                0: "1",
+                1: "10",
+                2: "100",
+                3: "1k",
+                4: "10k",
+                5: "100k",
+                6: "1M",
+                7: "10M",
+            }
+            tick_vals = [(i, labels.get(i, f"10^{i}")) for i in range(max_log + 1)]
+            self.plot_dh_hist.getAxis("left").setTicks([tick_vals])
+            self.plot_dh_hist.setLabel("left", "Number of Common States (Log₁₀)")
+        else:
+            y_height = hist_y
+            self.plot_dh_hist.getAxis("left").setTicks(None)
+            self.plot_dh_hist.setLabel("left", "Number of Common States")
+
+        bg_dh = pg.BarGraphItem(
+            x0=hist_x[:-1],
+            x1=hist_x[1:],
+            height=y_height,
+            brush=pg.mkBrush("#2563eb"),
+            pen=pg.mkPen("w"),
+        )
+        self.plot_dh_hist.addItem(bg_dh)
+
+        line_zero_dh = pg.InfiniteLine(
+            pos=0,
+            angle=90,
+            pen=pg.mkPen("#dc2626", width=2, style=Qt.PenStyle.DashLine),
+            label="Δh = 0",
+        )
+        self.plot_dh_hist.addItem(line_zero_dh)
 
     def set_data(self, da, db, la="A", lb="B"):
         key = (id(da), id(db), la, lb)
@@ -244,6 +327,8 @@ class CanvasHeuristicComparison(QWidget):
                 p_f_a,
                 p_f_b,
             )
+
+        self._common_res = common_res
 
         n_valid = common_res["num_valid_h_common"]
         self.card_common.setText(f"{n_valid:,} unique")
@@ -314,36 +399,7 @@ class CanvasHeuristicComparison(QWidget):
         plot_profile(self.plot_f_profile, p_f_a, p_f_b, "Evaluation f(n) = g + h")
 
         # Plot 4: Δh Histogram
-        self.plot_dh_hist.clear()
-        self.plot_dh_hist.setLabel("bottom", "Δh = h_B(s) - h_A(s)")
-        self.plot_dh_hist.setLabel("left", "Number of Common States")
-
-        delta_h = common_res["delta_h"]
-        if len(delta_h) > 0:
-            min_dh = delta_h.min()
-            max_dh = delta_h.max()
-            if min_dh == max_dh:
-                bins = np.array([min_dh - 1.0, min_dh + 1.0])
-            else:
-                bins = np.linspace(min_dh, max_dh, 60)
-
-            hist_y, hist_x = np.histogram(delta_h, bins=bins)
-            bg_dh = pg.BarGraphItem(
-                x0=hist_x[:-1],
-                x1=hist_x[1:],
-                height=hist_y,
-                brush=pg.mkBrush("#2563eb"),
-                pen=pg.mkPen("w"),
-            )
-            self.plot_dh_hist.addItem(bg_dh)
-
-            line_zero_dh = pg.InfiniteLine(
-                pos=0,
-                angle=90,
-                pen=pg.mkPen("#dc2626", width=2, style=Qt.PenStyle.DashLine),
-                label="Δh = 0",
-            )
-            self.plot_dh_hist.addItem(line_zero_dh)
+        self._render_dh_plot(common_res)
 
         # Plot 5: h_A × h_B Scatter Plot
         self.plot_scatter_h.clear()

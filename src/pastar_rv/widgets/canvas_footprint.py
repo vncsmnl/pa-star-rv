@@ -11,6 +11,7 @@ try:
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QFrame,
         QGridLayout,
@@ -29,6 +30,7 @@ except ImportError:
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QFrame,
         QGridLayout,
@@ -201,7 +203,20 @@ class CanvasFootprint(QWidget):
         self.combo_detail_pair.currentIndexChanged.connect(self._on_detail_pair_changed)
         detail_ctrl_row.addWidget(self.combo_detail_pair)
         detail_ctrl_row.addWidget(create_info_badge("detail_pair_selector"))
-        detail_ctrl_row.addSpacing(20)
+        detail_ctrl_row.addSpacing(15)
+
+        self.chk_log_intensity = QCheckBox("Log₁₊ scale intensity")
+        self.chk_log_intensity.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.chk_log_intensity.setStyleSheet(
+            "QCheckBox { color: #1e293b; padding-right: 4px; }"
+            "QCheckBox:hover { color: #0284c7; }"
+        )
+        self.chk_log_intensity.setChecked(True)
+        self.chk_log_intensity.setToolTip(TOOLTIPS["chk_log_footprint_intensity"])
+        self.chk_log_intensity.toggled.connect(self._on_detail_pair_changed)
+        detail_ctrl_row.addWidget(self.chk_log_intensity)
+        detail_ctrl_row.addWidget(create_info_badge("chk_log_footprint_intensity"))
+        detail_ctrl_row.addSpacing(15)
 
         self.lbl_detail_jaccard = QLabel("Jaccard: —")
         self.lbl_detail_jaccard.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -465,13 +480,20 @@ class CanvasFootprint(QWidget):
         diff_abs = fp["diff_abs"]
         diff_rel = fp["diff_rel"]
 
+        is_log = self.chk_log_intensity.isChecked()
+        scale_tag = "[Log₁₊ Count]" if is_log else "[Linear Count]"
+
         vmax_raw = max(HA.max(), HB.max(), 1.0)
-        img_data_a = np.log1p(HA) / np.log1p(vmax_raw)
-        img_data_b = np.log1p(HB) / np.log1p(vmax_raw)
+        if is_log:
+            img_data_a = np.log1p(HA) / np.log1p(vmax_raw)
+            img_data_b = np.log1p(HB) / np.log1p(vmax_raw)
+        else:
+            img_data_a = HA / vmax_raw
+            img_data_b = HB / vmax_raw
 
         # 1. Dataset A Heatmap
         self.plot_detail_a.clear()
-        self.plot_detail_a.setTitle(f"{pair_title} · A: {la} ({len(cA):,} nodes) [Log Count]")
+        self.plot_detail_a.setTitle(f"{pair_title} · A: {la} ({len(cA):,} nodes) {scale_tag}")
         self.plot_detail_a.setLabel("bottom", f"Seq {d0 + 1}")
         self.plot_detail_a.setLabel("left", f"Seq {d1 + 1}")
         item_a = pg.ImageItem(img_data_a)
@@ -481,7 +503,7 @@ class CanvasFootprint(QWidget):
 
         # 2. Dataset B Heatmap
         self.plot_detail_b.clear()
-        self.plot_detail_b.setTitle(f"{pair_title} · B: {lb} ({len(cB):,} nodes) [Log Count]")
+        self.plot_detail_b.setTitle(f"{pair_title} · B: {lb} ({len(cB):,} nodes) {scale_tag}")
         self.plot_detail_b.setLabel("bottom", f"Seq {d0 + 1}")
         self.plot_detail_b.setLabel("left", f"Seq {d1 + 1}")
         item_b = pg.ImageItem(img_data_b)

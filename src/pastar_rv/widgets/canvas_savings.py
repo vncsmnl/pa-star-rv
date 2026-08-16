@@ -10,6 +10,7 @@ try:
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QFont
     from PyQt6.QtWidgets import (
+        QCheckBox,
         QFrame,
         QGridLayout,
         QHBoxLayout,
@@ -22,6 +23,7 @@ except ImportError:
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
+        QCheckBox,
         QFrame,
         QGridLayout,
         QHBoxLayout,
@@ -49,6 +51,9 @@ class CanvasSavings(QWidget):
         super().__init__(parent)
         self._current_key = None
         self._cache = {}
+        self._savings = None
+        self._la = "A"
+        self._lb = "B"
         self._build_ui()
 
     def _build_ui(self):
@@ -135,7 +140,15 @@ class CanvasSavings(QWidget):
             p.getAxis("bottom").setPen("k")
             p.addLegend(offset=(10, 10))
 
-        def wrap_plot(plot_widget, title_text, tooltip_key):
+        self.chk_log_cum = QCheckBox("Log Y")
+        self.chk_log_cum.setToolTip(TOOLTIPS["chk_log_cum_exp"])
+        self.chk_log_cum.toggled.connect(self._on_log_cum_toggled)
+
+        self.chk_log_ratio = QCheckBox("Log Y")
+        self.chk_log_ratio.setToolTip(TOOLTIPS["chk_log_local_ratio"])
+        self.chk_log_ratio.toggled.connect(self._on_log_ratio_toggled)
+
+        def wrap_plot(plot_widget, title_text, tooltip_key, log_checkbox=None):
             container = QWidget()
             vbox = QVBoxLayout(container)
             vbox.setContentsMargins(0, 0, 0, 0)
@@ -150,11 +163,20 @@ class CanvasSavings(QWidget):
             if tooltip_key and tooltip_key in TOOLTIPS:
                 h_row.addWidget(create_info_badge(tooltip_key))
             h_row.addStretch()
+            if log_checkbox is not None:
+                log_checkbox.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+                log_checkbox.setStyleSheet(
+                    "QCheckBox { color: #475569; padding-right: 4px; }"
+                    "QCheckBox:hover { color: #0f172a; }"
+                )
+                h_row.addWidget(log_checkbox)
             vbox.addLayout(h_row)
             vbox.addWidget(plot_widget)
             return container
 
-        w_cum = wrap_plot(self.plot_cum, "Cumulative Expanded Nodes", "plot_cum_exp")
+        w_cum = wrap_plot(
+            self.plot_cum, "Cumulative Expanded Nodes", "plot_cum_exp", self.chk_log_cum
+        )
         w_cum_diff = wrap_plot(
             self.plot_cum_diff, "Cumulative Expansion Difference (A − B)", "plot_cum_diff"
         )
@@ -167,7 +189,10 @@ class CanvasSavings(QWidget):
             "plot_local_red",
         )
         w_local_ratio = wrap_plot(
-            self.plot_local_ratio, "Local Expansion Ratio (B / A)", "plot_local_ratio"
+            self.plot_local_ratio,
+            "Local Expansion Ratio (B / A)",
+            "plot_local_ratio",
+            self.chk_log_ratio,
         )
 
         grid.addWidget(w_cum, 0, 0)
@@ -180,6 +205,67 @@ class CanvasSavings(QWidget):
         grid.addLayout(bottom_row, 1, 0, 1, 2)
 
         root_layout.addLayout(grid)
+
+    def _on_log_cum_toggled(self):
+        if self._savings is not None:
+            self._render_cum_plot(self._savings, self._la, self._lb)
+
+    def _on_log_ratio_toggled(self):
+        if self._savings is not None:
+            self._render_ratio_plot(self._savings)
+
+    def _render_cum_plot(self, savings, la="A", lb="B"):
+        bin_centers = savings["bin_centers"]
+        cum_a = savings["cum_a"]
+        cum_b = savings["cum_b"]
+        is_log = self.chk_log_cum.isChecked()
+
+        self.plot_cum.clear()
+        self.plot_cum.setLogMode(x=False, y=is_log)
+        self.plot_cum.setLabel("bottom", "Geometric Alignment Progress")
+        self.plot_cum.setLabel(
+            "left",
+            "Cumulative Expanded Nodes (Log₁₀)" if is_log else "Cumulative Expanded Nodes",
+        )
+        y_a = np.maximum(cum_a, 1) if is_log else cum_a
+        y_b = np.maximum(cum_b, 1) if is_log else cum_b
+        self.plot_cum.plot(bin_centers, y_a, pen=pg.mkPen("#1f77b4", width=2.5), name=f"A: {la}")
+        self.plot_cum.plot(bin_centers, y_b, pen=pg.mkPen("#d62728", width=2.5), name=f"B: {lb}")
+
+    def _render_ratio_plot(self, savings):
+        bin_centers = savings["bin_centers"]
+        local_ratio = savings["local_ratio"]
+        is_log = self.chk_log_ratio.isChecked()
+
+        self.plot_local_ratio.clear()
+        self.plot_local_ratio.setLogMode(x=False, y=is_log)
+        self.plot_local_ratio.setLabel("bottom", "Geometric Alignment Progress")
+        self.plot_local_ratio.setLabel(
+            "left", "Expansion Ratio (B / A) [Log₁₀]" if is_log else "Expansion Ratio (B / A)"
+        )
+
+        valid_ratio_mask = ~np.isnan(local_ratio)
+        if is_log:
+            valid_ratio_mask &= local_ratio > 0
+
+        if np.any(valid_ratio_mask):
+            self.plot_local_ratio.plot(
+                bin_centers[valid_ratio_mask],
+                local_ratio[valid_ratio_mask],
+                pen=pg.mkPen("#9333ea", width=2),
+                symbol="t",
+                symbolSize=4,
+                symbolBrush="#9333ea",
+                name="Ratio B / A",
+            )
+        line_pos = 0.0 if is_log else 1.0
+        line_one_ratio = pg.InfiniteLine(
+            pos=line_pos,
+            angle=0,
+            pen=pg.mkPen("#dc2626", width=1.5, style=Qt.PenStyle.DashLine),
+            label="Ratio = 1.0 (Equal)",
+        )
+        self.plot_local_ratio.addItem(line_one_ratio)
 
     def set_data(self, da, db, la="A", lb="B"):
         key = (id(da), id(db), la, lb)
@@ -204,6 +290,10 @@ class CanvasSavings(QWidget):
             )
             self._cache[cache_key] = savings
 
+        self._savings = savings
+        self._la = la
+        self._lb = lb
+
         nA = savings["expansions_a"]
         nB = savings["expansions_b"]
         saved = savings["total_nodes_saved"]
@@ -217,19 +307,12 @@ class CanvasSavings(QWidget):
 
         bin_centers = savings["bin_centers"]
         bin_edges = savings["bin_edges"]
-        cum_a = savings["cum_a"]
-        cum_b = savings["cum_b"]
         cum_diff = savings["cum_diff"]
         local_saved = savings["local_saved"]
         local_red = savings["local_reduction"]
-        local_ratio = savings["local_ratio"]
 
         # Plot 1: Cumulative Expansions
-        self.plot_cum.clear()
-        self.plot_cum.setLabel("bottom", "Geometric Alignment Progress")
-        self.plot_cum.setLabel("left", "Cumulative Expanded Nodes")
-        self.plot_cum.plot(bin_centers, cum_a, pen=pg.mkPen("#1f77b4", width=2.5), name=f"A: {la}")
-        self.plot_cum.plot(bin_centers, cum_b, pen=pg.mkPen("#d62728", width=2.5), name=f"B: {lb}")
+        self._render_cum_plot(savings, la, lb)
 
         # Plot 2: Cumulative Difference
         self.plot_cum_diff.clear()
@@ -308,25 +391,4 @@ class CanvasSavings(QWidget):
         self.plot_local_red.addItem(line_zero_red)
 
         # Plot 5: Local Expansion Ratio (B / A)
-        self.plot_local_ratio.clear()
-        self.plot_local_ratio.setLabel("bottom", "Geometric Alignment Progress")
-        self.plot_local_ratio.setLabel("left", "Expansion Ratio (B / A)")
-
-        valid_ratio_mask = ~np.isnan(local_ratio)
-        if np.any(valid_ratio_mask):
-            self.plot_local_ratio.plot(
-                bin_centers[valid_ratio_mask],
-                local_ratio[valid_ratio_mask],
-                pen=pg.mkPen("#9333ea", width=2),
-                symbol="t",
-                symbolSize=4,
-                symbolBrush="#9333ea",
-                name="Ratio B / A",
-            )
-        line_one_ratio = pg.InfiniteLine(
-            pos=1.0,
-            angle=0,
-            pen=pg.mkPen("#dc2626", width=1.5, style=Qt.PenStyle.DashLine),
-            label="Ratio = 1.0 (Equal)",
-        )
-        self.plot_local_ratio.addItem(line_one_ratio)
+        self._render_ratio_plot(savings)
