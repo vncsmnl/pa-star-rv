@@ -1,77 +1,94 @@
-# PA-Star Runtime Visualizer (`pa-star-rv`)
+# PA-Star Runtime Visualizer (`pastar-rv`)
 
-A visual and quantitative runtime analysis tool for evaluating the execution dynamics of the **PA-Star** (Parallel A*) algorithm applied to the **Multiple Sequence Alignment (MSA)** problem.
+Runtime visual and quantitative analysis tool for rigorous evaluation and comparison of the **PA-Star** (Parallel A*) algorithm on the **Multiple Sequence Alignment (MSA)** problem.
 
-*Read this in other languages:* [Português](README.md)
+*Leia isto em português:* [Português](README.md)
 
+---
 
 ## Overview
 
-`pa-star-rv` enables the investigation of the 3D state space exploration dynamics generated during parallel PA-Star execution. The tool consumes execution logs and provides quantitative metrics regarding performance, principal diagonal deviation, thread jump patterns, and cost function evolution $f(n) = g(n) + h(n)$.
+`pastar-rv` enables deep investigation into spatial and heuristic search dynamics in PA-Star executions (e.g., comparing heuristic configurations such as `2all` vs `3all` or parallelism and hashing strategies).
+
+The tool efficiently handles logs containing millions of nodes using pure vectorized NumPy routines, strictly separating mathematical analysis on complete data from downsampling used purely for graphical rendering.
 
 ---
 
-## Visualization Modules
+## Analytical Visualization Tabs
 
-The system is organized into six interactive analytical modules:
+The application is structured into eight analytical tabs:
 
-### 1. 3D Trajectory & Projections (`classic`)
-Displays the 3D search trajectory in alignment state space with iteration-based temporal color mapping alongside orthogonal 2D projections onto the $XY$, $XZ$, and $YZ$ planes.
+### 1. Executive Summary (`Summary`)
+Complete dashboard with KPI cards and structured tables:
+- **Search Effort**: Total recorded expansions, nodes saved ($N_A - N_B$), and percentage reduction.
+- **Unique States & Deduplication**: Distinct state counts in A and B, common unique state intersection, exclusive states (Only A / Only B), and internal consistency checks for $h$ and $g$.
+- **Heuristic Advantage**: Comprehensive $\Delta h = h_B(s) - h_A(s)$ statistics on valid common states.
+- **Diagnostics**: Pre-deduplication $f(n) == g(n) + h(n)$ verification and path cost consistency ($g_A == g_B$).
+- **Footprint Occupancy**: Occupied cell counts and Jaccard overlap for $XY$, $XZ$, and $YZ$ projections.
 
-![3D Trajectory & Projections](assets/actin_2all_vs_actin_3all__classic.png)
+### 2. Search Savings (`Search Savings`)
+Effort reduction profiles across **Geometric Alignment Progress**:
+- *Cumulative Expanded Nodes by Geometric Progress* (A vs B).
+- *Cumulative Expansion Difference by Geometric Progress* ($cum_A - cum_B$).
+- *Nodes Saved in Region* (Binned bar chart of local expansion difference).
+- *Local Expansion Reduction (%)* and *Local Expansion Ratio (B / A)* with statistical support masking.
 
-### 2. Exploration Density (`density`)
-Heatmap visualization of node expansion frequencies across the discrete grid, highlighting high-convergence regions and search stagnation.
+### 3. State Space Footprint (`Search Footprint`)
+Comparative heatmaps for orthogonal projections ($XY$, $XZ$, $YZ$):
+- Footprints of A and B with shared logarithmic scale.
+- *Absolute Expansion Difference* ($H_B - H_A$) with symmetric divergent colormap centered at zero.
+- *Relative Exploration Density Difference* ($H_{B,norm} - H_{A,norm}$).
+- Integrated table of occupied cells and Jaccard overlap.
 
-![Exploration Density](assets/actin_2all_vs_actin_3all__density.png)
+### 4. Heuristic Behaviour (`Heuristic Behaviour`)
+Detailed evaluation function analysis across geometric space:
+- Profiles of $h(n)$, $g(n)$, and $f(n)$ across geometric progress (medians and P25/P75 percentiles).
+- Histogram of $\Delta h = h_B(s) - h_A(s)$ on valid common states.
+- Scatter plot of $h_A \times h_B$ with diagonal reference line $y = x$.
 
-### 3. Search Dynamics (`dynamics`)
-Temporal evolution of cost metrics: g-score $g(n)$, h-score $h(n)$, and f-score $f(n)$, alongside iteration-level jump counts.
+### 5. Search Band (`Search Band`)
+Measures Euclidean distance from the main diagonal ($i = j = k = \dots$):
+- Search band width profile by geometric progress (P25, median, P75, P90 for A and B).
+- Global deviation distributions in absolute count and normalized probability density.
 
-![Search Dynamics](assets/actin_2all_vs_actin_3all__dynamics.png)
+### 6. Exploration Density (`Exploration Density`)
+Heatmaps of expansion frequency on the discrete 2D grid with reference diagonal.
 
-### 4. Diagonal Band Deviation (`band`)
-Measures the Euclidean distance of expanded states relative to the main diagonal ($i = j = k$), serving as a key metric for evaluating search-band heuristics.
+### 7. Expansion Dynamics (`Expansion Dynamics`)
+- Local minimum $h(n)$ of expanded nodes.
+- Local average $h(n)$ of expanded nodes.
+- Expansion displacement step distribution (Manhattan $L_1$).
+- Cumulative expansion displacements.
 
-![Diagonal Band Deviation](assets/actin_2all_vs_actin_3all__band.png)
-
-### 5. State Space Footprint (`footprint`)
-Spatial footprint representation illustrating the geometric boundaries and coverage of visited states in 3D space.
-
-![State Space Footprint](assets/actin_2all_vs_actin_3all__footprint.png)
-
-### 6. Comparative Analysis (`compare`)
-Enables side-by-side loading of two execution logs (Log A vs Log B) to assess the impact of thread count variations, hash partitioning strategies, and shift parameters.
-
-![Comparative Analysis](assets/actin_2all_vs_actin_3all__compare.png)
+### 8. 3D Trajectory & Projections (`3D + Projections`)
+Interactive OpenGL-accelerated 3D trajectory visualization with temporal color gradient and synchronized orthogonal 2D projections.
 
 ---
 
-## Calculated Metrics
+## CLI Validation & Benchmarking (`pastar-validate`)
 
-| Metric | Academic / Computational Description |
-| :--- | :--- |
-| **Iterations ($N$)** | Total number of node expansions performed in state space. |
-| **Thread Jumps** | Spatial discontinuities caused by context switches between threads or hash partitions (Manhattan distance $> 1$). |
-| **Band Deviation ($\text{Dev}$)** | Perpendicular Euclidean distance between node coordinates $(x, y, z)$ and the main alignment diagonal. |
-| **Cost Functions ($g, h, f$)** | Accumulated cost $g(n)$, heuristic estimate $h(n)$, and total cost $f(n) = g(n) + h(n)$ across iterations. |
+A standalone CLI tool is included for mathematical validation and benchmarking without GUI overhead:
 
----
-
-## Input Log Format
-
-The visualizer parses `.txt` execution logs generated by PA-Star structured with the following header and tab-delimited format:
-
-```text
-PA-Star Execution Log
-Threads: 4
-Hash: Full-Zorder
-Shift: 12
-
-0	1	Adding:	(1 0 0)	g(90) h(6913) f(7003)
-0	2	Adding:	(0 1 0)	g(90) h(6913) f(7003)
-...
+```bash
+uv run pastar-validate logs/1fjlA_2all.txt logs/1fjlA_3all.txt
 ```
+
+Reports:
+- Execution time and process memory (RSS).
+- Intersection strategy benchmarks.
+- Quantitative analysis of search effort, unique states, $\Delta h$, occupancy, and diagnostics.
+
+---
+
+## Concepts & Definitions
+
+| Concept | Definition |
+| :--- | :--- |
+| **Expansion Count** | Total number of node expansion records in the log. |
+| **Unique Expanded States** | Number of distinct coordinates explored in state space. |
+| **Occupied Cells** | Number of occupied 2D histogram bins in a projection (not synonymous with unique states). |
+| **Geometric Alignment Progress** | Normalized geometric projection into alignment space $\frac{1}{D}\sum \frac{\text{coord}_d}{\text{ref}_d}$ (not execution time or search depth). |
+| **$\Delta h$ on Common States** | Difference $h_B(s) - h_A(s)$ computed only on exact common coordinates consistent in both runs. |
 
 ---
 
@@ -79,20 +96,32 @@ Shift: 12
 
 ```text
 pa-star-rv/
-├── pa-star-rv.py          # Main application (PyQt6 GUI)
-├── parser.py              # High-performance vectorized log parser (NumPy)
-├── widgets/               # PyQtGraph / Matplotlib graphical modules
-│   ├── canvas_3d.py       # 3D trajectory and projections
-│   ├── canvas_density.py  # Exploration density heatmap
-│   ├── canvas_dynamics.py # f, g, h search dynamics
-│   ├── canvas_band.py     # Diagonal band deviation
-│   ├── canvas_footprint.py# State space footprint
-│   └── canvas_comparison.py# Dual-log comparative analysis (A vs B)
-├── assets/                # Screenshots and demonstration figures
-├── logs/                  # Sample execution log files
-├── README.md              # Portuguese documentation
-├── README_EN.md           # English documentation
-└── requirements.txt       # Python dependencies
+├── pyproject.toml              # Central uv config, dependencies, ruff and scripts
+├── uv.lock                     # Deterministic uv lockfile
+├── src/
+│   └── pastar_rv/             # Main package
+│       ├── __init__.py
+│       ├── __main__.py        # Executable via python -m pastar_rv
+│       ├── app.py             # Main GUI application (MainWindow)
+│       ├── parser.py          # Vectorized log parser
+│       ├── metrics.py         # Pure NumPy analysis and metrics module
+│       ├── cli.py             # Standalone CLI validation and benchmark script
+│       └── widgets/           # PyQtGraph / OpenGL canvases
+│           ├── __init__.py
+│           ├── canvas_3d.py
+│           ├── canvas_band.py
+│           ├── canvas_density.py
+│           ├── canvas_dynamics.py
+│           ├── canvas_footprint.py
+│           ├── canvas_heuristic.py
+│           ├── canvas_savings.py
+│           └── canvas_summary.py
+├── tests/                     # Unit and integration test suite
+│   ├── __init__.py
+│   ├── test_metrics.py        # Unit tests for metrics module
+│   └── test_gui_integration.py# Integration tests for widgets and MainWindow
+├── assets/                    # Screenshots and demo images
+└── logs/                      # Sample execution logs
 ```
 
 ---
@@ -100,30 +129,30 @@ pa-star-rv/
 ## Requirements & Installation
 
 ### Prerequisites
-* Python 3.8+
+* Python 3.10+
+* [uv](https://docs.astral.sh/uv/)
 
 ### Installation
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
-
-Main dependencies:
-* `PyQt6` / `PyQt5` — GUI framework with OpenGL acceleration support.
-* `pyqtgraph` — High-performance 2D/3D visualization engine.
-* `matplotlib` — Map rendering and auxiliary plotting.
-* `numpy` — Vectorized C-contiguous array processing.
 
 ---
 
-## Usage
+## Running the Application
 
-Launch the graphical user interface by running:
-
+### Graphical User Interface
 ```bash
-python pa-star-rv.py
+uv run pastar-rv
 ```
 
-1. Click **"📂 Open Log A"** to load a primary log file.
-2. (Optional) Click **"📂 Open Log B"** to load a secondary log file for comparative analysis.
-3. Switch between tabs to explore different analytical dimensions.
-4. Click **"💾 Save Current Tab"** or **"💾 Export All Tabs"** to export high-resolution figures.
+### Running Automated Tests
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+### Code Quality (Lint & Format)
+```bash
+ruff check .
+ruff format --check .
+```
